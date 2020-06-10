@@ -31,11 +31,10 @@ type ProviderVM interface {
 
 // manager is the struct which implement ProviderVM interface
 // Use kubernetesClient to access secret params assigned by user
-// Use kubevirtClientBuilder to create the OverKube kubevirtClient used
+// Use kubevirtClientBuilder to create the UnderKube kubevirtClient used
 type manager struct {
 	kubevirtClientBuilder kubevirtclient.ClientBuilderFuncType
-	// api server controller runtime client
-	kubernetesClient kubernetesclient.Client
+	kubernetesClient      kubernetesclient.Client
 }
 
 // New creates provider vm instance
@@ -47,36 +46,37 @@ func New(kubevirtClientBuilder kubevirtclient.ClientBuilderFuncType, kubernetesC
 }
 
 // Create creates machine if it does not exists.
-func (m *manager) Create(machine *machinev1.Machine) (err error) {
-	machineScope, machineScopeErr := m.prepareMachineScope(machine, "create")
-	if machineScopeErr != nil {
-		return machineScopeErr
+func (m *manager) Create(machine *machinev1.Machine) (resultErr error) {
+	machineScope, err := newMachineScope(machine, m.kubernetesClient, m.kubevirtClientBuilder)
+	if err != nil {
+		return err
 	}
+
+	klog.Infof("%s: create machine", machineScope.getMachineName())
 
 	defer func() {
 		// After the operation is done (success or failure)
 		// Update the machine object with the relevant changes
-		patchMachineErr := machineScope.patchMachine()
-		if patchMachineErr != nil {
-			err = patchMachineErr
+		if err := machineScope.patchMachine(); err != nil {
+			resultErr = err
 		}
 	}()
 
-	vm, createVMErr := m.createVM(machineScope.virtualMachine, machineScope)
-	if createVMErr != nil {
-		klog.Errorf("%s: error creating machine: %v", machineScope.getMachineName(), createVMErr)
+	vm, err := m.createVM(machineScope.virtualMachine, machineScope)
+	if err != nil {
+		klog.Errorf("%s: error creating machine: %v", machineScope.getMachineName(), err)
 		conditionFailed := conditionFailed()
-		conditionFailed.Message = createVMErr.Error()
+		conditionFailed.Message = err.Error()
 		machineScope.setProviderStatus(nil, conditionFailed)
-		return fmt.Errorf("failed to create virtual machine: %w", createVMErr)
+		return fmt.Errorf("failed to create virtual machine: %w", err)
 	}
 
 	klog.Infof("Created Machine %v", machineScope.getMachineName())
 
 	machineScope.setProviderID(vm)
 
-	if specificErr := machineScope.setMachineCloudProviderSpecifics(vm); specificErr != nil {
-		return fmt.Errorf("failed to set machine cloud provider specifics: %w", specificErr)
+	if err := machineScope.setMachineCloudProviderSpecifics(vm); err != nil {
+		return fmt.Errorf("failed to set machine cloud provider specifics: %w", err)
 	}
 
 	machineScope.setProviderStatus(vm, conditionSuccess())
@@ -85,29 +85,32 @@ func (m *manager) Create(machine *machinev1.Machine) (err error) {
 }
 
 // delete deletes machine
-func (m *manager) Delete(machine *machinev1.Machine) (err error) {
-	machineScope, machineScopeErr := m.prepareMachineScope(machine, "delete")
-	if machineScopeErr != nil {
-		return machineScopeErr
+func (m *manager) Delete(machine *machinev1.Machine) (resultErr error) {
+	machineScope, err := newMachineScope(machine, m.kubernetesClient, m.kubevirtClientBuilder)
+	if err != nil {
+		return err
 	}
+
+	klog.Infof("%s: delete machine", machineScope.getMachineName())
 
 	defer func() {
 		// After the operation is done (success or failure)
 		// Update the machine object with the relevant changes
-		patchhMachineErr := machineScope.patchMachine()
-		if patchhMachineErr != nil {
-			err = patchhMachineErr
+		if err := machineScope.patchMachine(); err != nil {
+			resultErr = err
 		}
 	}()
-	existingVM, existingVMErr := m.getVM(machineScope.virtualMachine.GetName(), machineScope.virtualMachine.GetNamespace(), machineScope)
-	if existingVMErr != nil {
-		// TODO ask Nir how to check it  github.com/jinzhu/gorm  + gorm.IsRecordNotFoundError(existingVMErr)
-		if strings.Contains(existingVMErr.Error(), "not found") {
+
+	existingVM, err := m.getVM(machineScope.virtualMachine.GetName(), machineScope.virtualMachine.GetNamespace(), machineScope)
+	if err != nil {
+		// TODO ask Nir how to check it
+		if strings.Contains(err.Error(), "not found") {
 			klog.Infof("%s: VM does not exist", machineScope.getMachineName())
 			return nil
 		}
-		klog.Errorf("%s: error getting existing VM: %v", machineScope.getMachineName(), existingVMErr)
-		return existingVMErr
+
+		klog.Errorf("%s: error getting existing VM: %v", machineScope.getMachineName(), err)
+		return err
 	}
 
 	if existingVM == nil {
@@ -115,8 +118,8 @@ func (m *manager) Delete(machine *machinev1.Machine) (err error) {
 		return nil
 	}
 
-	if deleteVMErr := m.deleteVM(machineScope.virtualMachine.GetName(), machineScope.virtualMachine.GetNamespace(), machineScope); deleteVMErr != nil {
-		return fmt.Errorf("failed to delete VM: %w", deleteVMErr)
+	if err := m.deleteVM(machineScope.virtualMachine.GetName(), machineScope.virtualMachine.GetNamespace(), machineScope); err != nil {
+		return fmt.Errorf("failed to delete VM: %w", err)
 	}
 
 	klog.Infof("Deleted machine %v", machineScope.getMachineName())
@@ -125,25 +128,26 @@ func (m *manager) Delete(machine *machinev1.Machine) (err error) {
 }
 
 // update finds a vm and reconciles the machine resource status against it.
-func (m *manager) Update(machine *machinev1.Machine) (err error) {
-	machineScope, machineScopeErr := m.prepareMachineScope(machine, "update")
-	if machineScopeErr != nil {
-		return machineScopeErr
+func (m *manager) Update(machine *machinev1.Machine) (resultErr error) {
+	machineScope, err := newMachineScope(machine, m.kubernetesClient, m.kubevirtClientBuilder)
+	if err != nil {
+		return err
 	}
+
+	klog.Infof("%s: update machine", machineScope.getMachineName())
 
 	defer func() {
 		// After the operation is done (success or failure)
 		// Update the machine object with the relevant changes
-		patchhMachineErr := machineScope.patchMachine()
-		if patchhMachineErr != nil {
-			err = patchhMachineErr
+		if err := machineScope.patchMachine(); err != nil {
+			resultErr = err
 		}
 	}()
 
-	existingVM, existingVMErr := m.getVM(machineScope.virtualMachine.GetName(), machineScope.virtualMachine.GetNamespace(), machineScope)
-	if existingVMErr != nil {
-		klog.Errorf("%s: error getting existing VM: %v", machineScope.getMachineName(), existingVMErr)
-		return existingVMErr
+	existingVM, err := m.getVM(machineScope.virtualMachine.GetName(), machineScope.virtualMachine.GetNamespace(), machineScope)
+	if err != nil {
+		klog.Errorf("%s: error getting existing VM: %v", machineScope.getMachineName(), err)
+		return err
 	}
 
 	//TODO Danielle - update ProviderID to lowercase
@@ -162,11 +166,12 @@ func (m *manager) Update(machine *machinev1.Machine) (err error) {
 	}
 
 	machineScope.virtualMachine.ObjectMeta.ResourceVersion = existingVM.ObjectMeta.ResourceVersion
-	updatedVM, updateVMErr := m.updateVM(machineScope.virtualMachine, machineScope)
 
-	if updateVMErr != nil {
-		return fmt.Errorf("failed to update VM: %w", updateVMErr)
+	updatedVM, err := m.updateVM(machineScope.virtualMachine, machineScope)
+	if err != nil {
+		return fmt.Errorf("failed to update VM: %w", err)
 	}
+
 	machineScope.setProviderID(updatedVM)
 
 	if err := machineScope.setMachineCloudProviderSpecifics(updatedVM); err != nil {
@@ -174,49 +179,44 @@ func (m *manager) Update(machine *machinev1.Machine) (err error) {
 	}
 
 	klog.Infof("Updated machine %s", machineScope.getMachineName())
+
 	machineScope.setProviderStatus(updatedVM, conditionSuccess())
 
-	getUpdatedVM, getUpdatedVMErr := m.getVM(machineScope.virtualMachine.GetName(), machineScope.virtualMachine.GetNamespace(), machineScope)
-	if getUpdatedVMErr != nil {
-		klog.Errorf("%s: error getting updated VM: %v", machineScope.getMachineName(), existingVMErr)
+	getUpdatedVM, err := m.getVM(machineScope.virtualMachine.GetName(), machineScope.virtualMachine.GetNamespace(), machineScope)
+	if err != nil {
+		klog.Errorf("%s: error getting updated VM: %v", machineScope.getMachineName(), err)
 		getUpdatedVM = updatedVM
 	}
+
 	return m.requeueIfInstancePending(getUpdatedVM, machineScope.getMachineName())
 }
 
 // exists returns true if machine exists.
 func (m *manager) Exists(machine *machinev1.Machine) (bool, error) {
-	machineScope, machineScopeErr := m.prepareMachineScope(machine, "check exists")
-	if machineScopeErr != nil {
-		return false, machineScopeErr
+	machineScope, err := newMachineScope(machine, m.kubernetesClient, m.kubevirtClientBuilder)
+	if err != nil {
+		return false, err
 	}
 
-	existingVM, existingVMErr := m.getVM(machineScope.virtualMachine.GetName(), machineScope.virtualMachine.GetNamespace(), machineScope)
-	if existingVMErr != nil {
-		// TODO ask Nir how to check it  github.com/jinzhu/gorm  + gorm.IsRecordNotFoundError(existingVMErr)
-		if strings.Contains(existingVMErr.Error(), "not found") {
+	klog.Infof("%s: check if machine exists", machineScope.getMachineName())
+
+	existingVM, err := m.getVM(machineScope.virtualMachine.GetName(), machineScope.virtualMachine.GetNamespace(), machineScope)
+	if err != nil {
+		// TODO ask Nir how to check it
+		if strings.Contains(err.Error(), "not found") {
 			klog.Infof("%s: VM does not exist", machineScope.getMachineName())
 			return false, nil
 		}
-		klog.Errorf("%s: error getting existing VM: %v", machineScope.getMachineName(), existingVMErr)
-		return false, existingVMErr
+		klog.Errorf("%s: error getting existing VM: %v", machineScope.getMachineName(), err)
+		return false, err
 	}
+
 	if existingVM == nil {
 		klog.Infof("%s: VM does not exist", machineScope.getMachineName())
 		return false, nil
 	}
-	return true, existingVMErr
-}
 
-func (m *manager) prepareMachineScope(machine *machinev1.Machine, action string) (*machineScope, error) {
-	machineScope, machineScopeErr := newMachineScope(machine, m.kubernetesClient, m.kubevirtClientBuilder)
-	if machineScopeErr != nil {
-		return nil, machineScopeErr
-	}
-
-	klog.Infof("%s: %s machine", machineScope.getMachineName(), action)
-
-	return machineScope, nil
+	return true, nil
 }
 
 func (m *manager) createVM(virtualMachine *kubevirtapiv1.VirtualMachine, machineScope *machineScope) (*kubevirtapiv1.VirtualMachine, error) {

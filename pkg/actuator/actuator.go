@@ -69,6 +69,7 @@ func (a *Actuator) Create(ctx context.Context, machine *machinev1.Machine) error
 		fmtErr := fmt.Errorf(vmsFailFmt, vm.GetMachineName(machine), createEventAction, err)
 		return a.handleMachineError(machine, fmtErr, createEventAction)
 	}
+
 	a.eventRecorder.Eventf(machine, corev1.EventTypeNormal, createEventAction, "Created Machine %v", vm.GetMachineName(machine))
 	return nil
 }
@@ -109,6 +110,7 @@ func (a *Actuator) Delete(ctx context.Context, machine *machinev1.Machine) error
 		fmtErr := fmt.Errorf(vmsFailFmt, vm.GetMachineName(machine), deleteEventAction, err)
 		return a.handleMachineError(machine, fmtErr, deleteEventAction)
 	}
+
 	a.eventRecorder.Eventf(machine, corev1.EventTypeNormal, deleteEventAction, "Deleted machine %v", vm.GetMachineName(machine))
 	return nil
 }

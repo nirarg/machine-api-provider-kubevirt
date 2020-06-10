@@ -56,8 +56,8 @@ type kubevirtClient struct {
 	virtctlclient string
 }
 
-// NewClient creates our client wrapper object for the actual KubeVirt and VirtCtl clients we use.
-func NewClient(kubernetesClient kubernetesclient.Client, secretName, namespace string) (Client, error) {
+// New creates our client wrapper object for the actual KubeVirt and VirtCtl clients we use.
+func New(kubernetesClient kubernetesclient.Client, secretName, namespace string) (Client, error) {
 	if secretName == "" {
 		return nil, machineapiapierrors.InvalidMachineConfiguration("KubeVirt credentials secret - Invalid empty secretName")
 	}

@@ -1,19 +1,17 @@
 package vm
 
 import (
-	"context"
 	"fmt"
 	"time"
 
 	kubevirtproviderv1 "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/apis/kubevirtprovider/v1"
-	kubevirtclient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/client"
+	kubernetesclient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/kubernetes"
+	kubevirtclient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/kubevirt"
 	machinev1 "github.com/openshift/machine-api-operator/pkg/apis/machine/v1beta1"
 	machineapierros "github.com/openshift/machine-api-operator/pkg/controller/machine"
 	corev1 "k8s.io/api/core/v1"
 	apiresource "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	kubernetesclient "k8s.io/client-go/kubernetes"
-	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"k8s.io/klog"
 	kubevirtapiv1 "kubevirt.io/client-go/api/v1"
@@ -32,16 +30,16 @@ type machineScope struct {
 	// api server controller runtime client
 	kubevirtClient kubevirtclient.Client
 	// api server controller runtime client
-	runtimeClient runtimeclient.Client
+	kubernetesClient kubernetesclient.Client
 
 	// machine resource
 	machine        *machinev1.Machine
 	virtualMachine *kubevirtapiv1.VirtualMachine
 	// MachineCopy is used to generate a patch diff at the end of the scope's lifecycle.
-	machineToBePatched runtimeclient.Patch
+	originMachineCopy *machinev1.Machine
 }
 
-func newMachineScope(machine *machinev1.Machine, kubernetesClient *kubernetesclient.Clientset, kubevirtClientBuilder kubevirtclient.KubevirtClientBuilderFuncType, runtimeClient runtimeclient.Client) (*machineScope, error) {
+func newMachineScope(machine *machinev1.Machine, kubernetesClient kubernetesclient.Client, kubevirtClientBuilder kubevirtclient.ClientBuilderFuncType) (*machineScope, error) {
 	if validateMachineErr := validateMachine(*machine); validateMachineErr != nil {
 		return nil, fmt.Errorf("%v: failed validating machine provider spec: %w", machine.GetName(), validateMachineErr)
 	}
@@ -63,11 +61,10 @@ func newMachineScope(machine *machinev1.Machine, kubernetesClient *kubernetescli
 	}
 
 	return &machineScope{
-		kubevirtClient:     kubevirtClient,
-		machine:            machine,
-		virtualMachine:     virtualMachine,
-		runtimeClient:      runtimeClient,
-		machineToBePatched: runtimeclient.MergeFrom(machine.DeepCopy()),
+		kubevirtClient:    kubevirtClient,
+		machine:           machine,
+		virtualMachine:    virtualMachine,
+		originMachineCopy: machine.DeepCopy(),
 	}, nil
 }
 
@@ -306,7 +303,7 @@ func (s *machineScope) patchMachine() error {
 
 	// patch machine
 	statusCopy := *s.machine.Status.DeepCopy()
-	if err := s.runtimeClient.Patch(context.Background(), s.machine, s.machineToBePatched); err != nil {
+	if err := s.kubernetesClient.PatchMachine(s.machine, s.originMachineCopy); err != nil {
 		klog.Errorf("Failed to patch machine %q: %v", s.machine.GetName(), err)
 		return err
 	}
@@ -314,7 +311,7 @@ func (s *machineScope) patchMachine() error {
 	s.machine.Status = statusCopy
 
 	// patch status
-	if err := s.runtimeClient.Status().Patch(context.Background(), s.machine, s.machineToBePatched); err != nil {
+	if err := s.kubernetesClient.StatusPatchMachine(s.machine, s.originMachineCopy); err != nil {
 		klog.Errorf("Failed to patch machine status %q: %v", s.machine.GetName(), err)
 		return err
 	}

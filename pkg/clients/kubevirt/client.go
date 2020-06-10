@@ -14,28 +14,28 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package client
+package kubevirt
 
 import (
+	kubernetesclient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/kubernetes"
 	machineapiapierrors "github.com/openshift/machine-api-operator/pkg/controller/machine"
 	apimachineryerrors "k8s.io/apimachinery/pkg/api/errors"
 	k8smetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	kubernetesclient "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	v1 "kubevirt.io/client-go/api/v1"
 	"kubevirt.io/client-go/kubecli"
 )
 
-//go:generate  mockgen -source=./client.go -destination=./mock/client_generated.go -package=mock
+//go:generate mockgen -source=./client.go -destination=./mock/client_generated.go -package=mock
 
 const (
 	// UnderKubeConfig is secret key containing kubeconfig content of the UnderKube
 	UnderKubeConfig = "kubeconfig"
 )
 
-// KubevirtClientBuilderFuncType is function type for building aws client
-type KubevirtClientBuilderFuncType func(kubernetesClient *kubernetesclient.Clientset, secretName, namespace string) (Client, error)
+// ClientBuilderFuncType is function type for building aws client
+type ClientBuilderFuncType func(kubernetesClient kubernetesclient.Client, secretName, namespace string) (Client, error)
 
 // Client is a wrapper object for actual kubevirt clients: virtctl and the kubecli
 type Client interface {
@@ -57,7 +57,7 @@ type kubevirtClient struct {
 }
 
 // NewClient creates our client wrapper object for the actual KubeVirt and VirtCtl clients we use.
-func NewClient(kubernetesClient *kubernetesclient.Clientset, secretName, namespace string) (Client, error) {
+func NewClient(kubernetesClient kubernetesclient.Client, secretName, namespace string) (Client, error) {
 	if secretName == "" {
 		return nil, machineapiapierrors.InvalidMachineConfiguration("KubeVirt credentials secret - Invalid empty secretName")
 	}
@@ -66,7 +66,7 @@ func NewClient(kubernetesClient *kubernetesclient.Clientset, secretName, namespa
 		return nil, machineapiapierrors.InvalidMachineConfiguration("KubeVirt credentials secret - Invalid empty namespace")
 	}
 
-	userDataSecret, getSecretErr := kubernetesClient.CoreV1().Secrets(namespace).Get(secretName, k8smetav1.GetOptions{})
+	userDataSecret, getSecretErr := kubernetesClient.UserDataSecret(secretName, namespace)
 	if getSecretErr != nil {
 		if apimachineryerrors.IsNotFound(getSecretErr) {
 			return nil, machineapiapierrors.InvalidMachineConfiguration("KubeVirt credentials secret %s/%s: %v not found", namespace, secretName, getSecretErr)

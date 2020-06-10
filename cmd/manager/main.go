@@ -19,11 +19,11 @@ import (
 	"time"
 
 	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/actuator"
-	kubevirtclient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/client"
+	kubernetesclient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/kubernetes"
+	kubevirtclient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/kubevirt"
 	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/managers/vm"
 	mapiv1beta1 "github.com/openshift/machine-api-operator/pkg/apis/machine/v1beta1"
 	"github.com/openshift/machine-api-operator/pkg/controller/machine"
-	kubernetesclient "k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"k8s.io/klog"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
@@ -76,7 +76,7 @@ func main() {
 	}
 
 	// Initialize overKube kubernetes client
-	kubernetesClient, err := kubernetesclient.NewForConfig(mgr.GetConfig())
+	kubernetesClient, err := kubernetesclient.New(mgr)
 	if err != nil {
 		entryLog.Error(err, "Failed to create kubernetes client from configuration")
 	}
@@ -87,7 +87,7 @@ func main() {
 		klog.Fatalf("Error setting up scheme: %v", err)
 	}
 
-	providerVM := vm.New(kubevirtclient.NewClient, kubernetesClient, mgr.GetClient())
+	providerVM := vm.New(kubevirtclient.NewClient, kubernetesClient)
 	// Initialize machine actuator.
 	machineActuator := actuator.New(providerVM, mgr.GetEventRecorderFor("kubevirtcontroller"))
 

@@ -13,8 +13,8 @@ import (
 	kubernetesclient "k8s.io/client-go/kubernetes"
 
 	"github.com/golang/mock/gomock"
-	kubevirtClient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/client"
-	mockkubevirtclient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/client/mock"
+	kubevirtClient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/kubevirt"
+	mockkubevirtclient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/kubevirt/mock"
 	"gotest.tools/assert"
 	kubevirtapiv1 "kubevirt.io/client-go/api/v1"
 )

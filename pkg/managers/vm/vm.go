@@ -5,14 +5,12 @@ import (
 	"strings"
 	"time"
 
-	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
-
-	kubevirtclient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/client"
+	kubevirtclient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/kubevirt"
 	machinev1 "github.com/openshift/machine-api-operator/pkg/apis/machine/v1beta1"
 
+	kubernetesclient "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/kubernetes"
 	machinecontroller "github.com/openshift/machine-api-operator/pkg/controller/machine"
 	k8smetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	kubernetesclient "k8s.io/client-go/kubernetes"
 	"k8s.io/klog"
 	kubevirtapiv1 "kubevirt.io/client-go/api/v1"
 )
@@ -35,19 +33,16 @@ type ProviderVM interface {
 // Use kubernetesClient to access secret params assigned by user
 // Use kubevirtClientBuilder to create the OverKube kubevirtClient used
 type manager struct {
-	kubevirtClientBuilder kubevirtclient.KubevirtClientBuilderFuncType
+	kubevirtClientBuilder kubevirtclient.ClientBuilderFuncType
 	// api server controller runtime client
-	kubernetesClient *kubernetesclient.Clientset
-	// api server controller runtime client
-	runtimeClient runtimeclient.Client
+	kubernetesClient kubernetesclient.Client
 }
 
 // New creates provider vm instance
-func New(kubevirtClientBuilder kubevirtclient.KubevirtClientBuilderFuncType, kubernetesClient *kubernetesclient.Clientset, runtimeClient runtimeclient.Client) ProviderVM {
+func New(kubevirtClientBuilder kubevirtclient.ClientBuilderFuncType, kubernetesClient kubernetesclient.Client) ProviderVM {
 	return &manager{
 		kubernetesClient:      kubernetesClient,
 		kubevirtClientBuilder: kubevirtClientBuilder,
-		runtimeClient:         runtimeClient,
 	}
 }
 
@@ -214,7 +209,7 @@ func (m *manager) Exists(machine *machinev1.Machine) (bool, error) {
 }
 
 func (m *manager) prepareMachineScope(machine *machinev1.Machine, action string) (*machineScope, error) {
-	machineScope, machineScopeErr := newMachineScope(machine, m.kubernetesClient, m.kubevirtClientBuilder, m.runtimeClient)
+	machineScope, machineScopeErr := newMachineScope(machine, m.kubernetesClient, m.kubevirtClientBuilder)
 	if machineScopeErr != nil {
 		return nil, machineScopeErr
 	}

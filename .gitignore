@@ -9,3 +9,4 @@ bin/
 .idea/
 minikube
 docker-machine-driver-kvm2
+.vscode/

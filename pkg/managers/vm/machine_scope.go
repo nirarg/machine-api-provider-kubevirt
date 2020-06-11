@@ -56,9 +56,10 @@ func newMachineScope(machine *machinev1.Machine, kubernetesClient kubernetesclie
 
 	return &machineScope{
 		kubevirtClient:    kubevirtClient,
+		kubernetesClient:  kubernetesClient,
 		machine:           machine,
-		virtualMachine:    virtualMachine,
 		originMachineCopy: machine.DeepCopy(),
+		virtualMachine:    virtualMachine,
 	}, nil
 }
 

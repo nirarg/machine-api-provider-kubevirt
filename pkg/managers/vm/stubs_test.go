@@ -16,7 +16,7 @@ import (
 	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/overkube"
 	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/underkube"
 
-	kubevirtproviderv1 "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/apis/kubevirtprovider/v1"
+	kubevirtproviderv1alpha1 "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/apis/kubevirtprovider/v1alpha1"
 	machinev1 "github.com/openshift/machine-api-operator/pkg/apis/machine/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -57,12 +57,12 @@ func stubService(vmName string) *corev1.Service {
 	return service
 }
 func stubMachineScope(machine *machinev1.Machine, overkubeClient overkube.Client, underkubeClientBuilder underkube.ClientBuilderFuncType) (*machineScope, error) {
-	providerSpec, err := kubevirtproviderv1.ProviderSpecFromRawExtension(machine.Spec.ProviderSpec.Value)
+	providerSpec, err := kubevirtproviderv1alpha1.ProviderSpecFromRawExtension(machine.Spec.ProviderSpec.Value)
 	if err != nil {
 		return nil, machineapierros.InvalidMachineConfiguration("failed to get machine config: %v", err)
 	}
 
-	providerStatus, err := kubevirtproviderv1.ProviderStatusFromRawExtension(machine.Status.ProviderStatus)
+	providerStatus, err := kubevirtproviderv1alpha1.ProviderStatusFromRawExtension(machine.Status.ProviderStatus)
 	if err != nil {
 		return nil, machineapierros.InvalidMachineConfiguration("failed to get machine provider status: %v", err.Error())
 	}
@@ -189,7 +189,7 @@ func stubVirtualMachine(machineScope *machineScope) *kubevirtapiv1.VirtualMachin
 	return &virtualMachine
 }
 func stubMachine(labels map[string]string, providerID string) (*machinev1.Machine, error) {
-	providerSpecValue, providerSpecValueErr := kubevirtproviderv1.RawExtensionFromProviderSpec(&kubevirtproviderv1.KubevirtMachineProviderSpec{
+	providerSpecValue, providerSpecValueErr := kubevirtproviderv1alpha1.RawExtensionFromProviderSpec(&kubevirtproviderv1alpha1.KubevirtMachineProviderSpec{
 		SourcePvcName:      SourceTestPvcName,
 		IgnitionSecretName: workerUserDataSecretName,
 	})

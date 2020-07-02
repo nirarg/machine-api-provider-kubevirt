@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1
+package v1alpha1
 
 import (
 	kubevirtapiv1 "kubevirt.io/client-go/api/v1"
@@ -41,4 +41,8 @@ type KubevirtMachineProviderSpec struct {
 type KubevirtMachineProviderStatus struct {
 	kubevirtapiv1.VirtualMachineStatus
 	ResourceVersion string `json:"resourceVersion,omitempty"`
+}
+
+func init() {
+	SchemeBuilder.Register(&KubevirtMachineProviderSpec{})
 }

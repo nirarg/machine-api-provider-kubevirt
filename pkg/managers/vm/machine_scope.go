@@ -8,7 +8,7 @@ import (
 
 	machinecontroller "github.com/openshift/machine-api-operator/pkg/controller/machine"
 
-	kubevirtproviderv1 "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/apis/kubevirtprovider/v1"
+	kubevirtproviderv1alpha1 "github.com/kubevirt/cluster-api-provider-kubevirt/pkg/apis/kubevirtprovider/v1alpha1"
 	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/overkube"
 	"github.com/kubevirt/cluster-api-provider-kubevirt/pkg/clients/underkube"
 	machinev1 "github.com/openshift/machine-api-operator/pkg/apis/machine/v1beta1"
@@ -46,8 +46,8 @@ type machineScope struct {
 	overkubeClient        overkube.Client
 	machine               *machinev1.Machine
 	originMachineCopy     *machinev1.Machine
-	machineProviderSpec   *kubevirtproviderv1.KubevirtMachineProviderSpec
-	machineProviderStatus *kubevirtproviderv1.KubevirtMachineProviderStatus
+	machineProviderSpec   *kubevirtproviderv1alpha1.KubevirtMachineProviderSpec
+	machineProviderStatus *kubevirtproviderv1alpha1.KubevirtMachineProviderStatus
 }
 
 func newMachineScope(machine *machinev1.Machine, overkubeClient overkube.Client, underkubeClientBuilder underkube.ClientBuilderFuncType) (*machineScope, error) {
@@ -55,12 +55,12 @@ func newMachineScope(machine *machinev1.Machine, overkubeClient overkube.Client,
 		return nil, fmt.Errorf("%v: failed validating machine provider spec: %w", machine.GetName(), err)
 	}
 
-	providerSpec, err := kubevirtproviderv1.ProviderSpecFromRawExtension(machine.Spec.ProviderSpec.Value)
+	providerSpec, err := kubevirtproviderv1alpha1.ProviderSpecFromRawExtension(machine.Spec.ProviderSpec.Value)
 	if err != nil {
 		return nil, machinecontroller.InvalidMachineConfiguration("failed to get machine config: %v", err)
 	}
 
-	providerStatus, err := kubevirtproviderv1.ProviderStatusFromRawExtension(machine.Status.ProviderStatus)
+	providerStatus, err := kubevirtproviderv1alpha1.ProviderStatusFromRawExtension(machine.Status.ProviderStatus)
 	if err != nil {
 		return nil, machinecontroller.InvalidMachineConfiguration("failed to get machine provider status: %v", err.Error())
 	}
@@ -348,7 +348,7 @@ func (s *machineScope) patchMachine() error {
 
 	klog.V(3).Infof("%v: patching machine", s.machine.GetName())
 
-	providerStatus, err := kubevirtproviderv1.RawExtensionFromProviderStatus(s.machineProviderStatus)
+	providerStatus, err := kubevirtproviderv1alpha1.RawExtensionFromProviderStatus(s.machineProviderStatus)
 	if err != nil {
 		return machinecontroller.InvalidMachineConfiguration("failed to get machine provider status: %v", err.Error())
 	}
@@ -372,8 +372,8 @@ func (s *machineScope) patchMachine() error {
 	return nil
 }
 
-func machineProviderStatusFromVirtualMachine(virtualMachine *kubevirtapiv1.VirtualMachine) *kubevirtproviderv1.KubevirtMachineProviderStatus {
-	return &kubevirtproviderv1.KubevirtMachineProviderStatus{
+func machineProviderStatusFromVirtualMachine(virtualMachine *kubevirtapiv1.VirtualMachine) *kubevirtproviderv1alpha1.KubevirtMachineProviderStatus {
+	return &kubevirtproviderv1alpha1.KubevirtMachineProviderStatus{
 		VirtualMachineStatus: virtualMachine.Status,
 		ResourceVersion:      virtualMachine.ResourceVersion,
 	}

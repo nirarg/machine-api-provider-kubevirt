@@ -17,12 +17,17 @@ limitations under the License.
 package v1alpha1
 
 import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubevirtapiv1 "kubevirt.io/client-go/api/v1"
 )
 
 // KubevirtMachineProviderSpec is the Schema for the KubevirtMachineProviderSpec API
 // +k8s:openapi-gen=true
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type KubevirtMachineProviderSpec struct {
+	metav1.TypeMeta    `json:",inline"`
+	metav1.ObjectMeta  `json:"metadata,omitempty"`
 	SourcePvcName      string `json:"sourcePvcName,omitempty"`
 	SourcePvcNamespace string `json:"sourcePvcNamespace,omitempty"`
 	SecretName         string `json:"secretName,omitempty"`
@@ -37,7 +42,7 @@ type KubevirtMachineProviderSpec struct {
 
 // KubevirtMachineProviderStatus is the type that will be embedded in a Machine.Status.ProviderStatus field.
 // It contains Kubevirt-specific status information.
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +k8s:openapi-gen=true
 type KubevirtMachineProviderStatus struct {
 	kubevirtapiv1.VirtualMachineStatus
 	ResourceVersion string `json:"resourceVersion,omitempty"`

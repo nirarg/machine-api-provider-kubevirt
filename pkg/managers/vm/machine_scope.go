@@ -79,13 +79,11 @@ func newMachineScope(machine *machinev1.Machine, overkubeClient overkube.Client,
 		machineProviderStatus: providerStatus,
 	}, nil
 }
+
 func getVMNamespace(machine *machinev1.Machine) string {
-	namespace, ok := getClusterID(machine)
-	if !ok {
-		namespace = machine.Namespace
-	}
-	return namespace
+	return machine.Namespace
 }
+
 func (s *machineScope) machineToVirtualMachine() (*kubevirtapiv1.VirtualMachine, error) {
 	runAlways := kubevirtapiv1.RunStrategyAlways
 	// use getClusterID as a namespace

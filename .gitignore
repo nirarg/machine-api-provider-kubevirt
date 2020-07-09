@@ -10,3 +10,4 @@ bin/
 minikube
 docker-machine-driver-kvm2
 .vscode/
+*.swp

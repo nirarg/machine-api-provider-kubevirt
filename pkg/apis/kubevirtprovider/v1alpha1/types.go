@@ -32,7 +32,7 @@ type KubevirtMachineProviderSpec struct {
 	SourcePvcNamespace string `json:"sourcePvcNamespace,omitempty"`
 	SecretName         string `json:"secretName,omitempty"`
 	RequestedMemory    string `json:"requestedMemory,omitempty"`
-	RequestedCPU       string `json:"requestedCPU,omitempty"`
+	RequestedCPU       uint32 `json:"requestedCPU,omitempty"`
 	MachineType        string `json:"machineType,omitempty"`
 	StorageClassName   string `json:"storageClassName,omitempty"`
 	IgnitionSecretName string `json:"ignitionSecretName,omitempty"`

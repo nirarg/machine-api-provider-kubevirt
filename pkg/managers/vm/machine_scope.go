@@ -30,8 +30,8 @@ const (
 )
 
 const (
-	pvcRequestsStorage                = "35Gi"
 	defaultRequestedMemory            = "2048M"
+	defaultRequestedStorage           = "35Gi"
 	defaultPersistentVolumeAccessMode = corev1.ReadWriteOnce
 	defaultDataVolumeDiskName         = "datavolumedisk1"
 	defaultCloudInitVolumeDiskName    = "cloudinitdisk"
@@ -99,7 +99,7 @@ func (s *machineScope) machineToVirtualMachine() (*kubevirtapiv1.VirtualMachine,
 		Spec: kubevirtapiv1.VirtualMachineSpec{
 			RunStrategy: &runAlways,
 			DataVolumeTemplates: []cdiv1.DataVolume{
-				*buildBootVolumeDataVolumeTemplate(s.machine.GetName(), s.machineProviderSpec.SourcePvcName, namespace, s.machineProviderSpec.SourcePvcNamespace),
+				*buildBootVolumeDataVolumeTemplate(s.machine.GetName(), s.machineProviderSpec.SourcePvcName, namespace),
 			},
 			Template: vmiTemplate,
 		},
@@ -210,6 +210,10 @@ func (s *machineScope) buildVMITemplate(namespace string) (*kubevirtapiv1.Virtua
 	if requestedMemory == "" {
 		requestedMemory = defaultRequestedMemory
 	}
+	requestedStorage := s.machineProviderSpec.RequestedStorage
+	if requestedStorage == "" {
+		requestedStorage = defaultRequestedStorage
+	}
 	requests[corev1.ResourceMemory] = apiresource.MustParse(requestedMemory)
 
 	if s.machineProviderSpec.RequestedCPU != 0 {
@@ -261,7 +265,7 @@ func (s *machineScope) getUserData(namespace string) (string, error) {
 	return userData, nil
 }
 
-func buildBootVolumeDataVolumeTemplate(virtualMachineName, pvcName, dvNamespace, pvcNamespace string) *cdiv1.DataVolume {
+func buildBootVolumeDataVolumeTemplate(virtualMachineName, pvcName, dvNamespace string) *cdiv1.DataVolume {
 	return &cdiv1.DataVolume{
 		TypeMeta: metav1.TypeMeta{APIVersion: cdiv1.SchemeGroupVersion.String()},
 		ObjectMeta: metav1.ObjectMeta{
@@ -273,7 +277,6 @@ func buildBootVolumeDataVolumeTemplate(virtualMachineName, pvcName, dvNamespace,
 				PVC: &cdiv1.DataVolumeSourcePVC{
 					Name:      pvcName,
 					Namespace: dvNamespace,
-					//Namespace: pvcNamespace,
 				},
 			},
 			PVC: &corev1.PersistentVolumeClaimSpec{
@@ -284,7 +287,7 @@ func buildBootVolumeDataVolumeTemplate(virtualMachineName, pvcName, dvNamespace,
 				// TODO: Where to get it?? - add as a list
 				Resources: corev1.ResourceRequirements{
 					Requests: corev1.ResourceList{
-						corev1.ResourceStorage: apiresource.MustParse(pvcRequestsStorage),
+						corev1.ResourceStorage: apiresource.MustParse(defaultRequestedStorage),
 					},
 				},
 			},

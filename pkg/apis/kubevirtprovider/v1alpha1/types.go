@@ -29,10 +29,10 @@ type KubevirtMachineProviderSpec struct {
 	metav1.TypeMeta    `json:",inline"`
 	Namespace          string `json:"namespace,omitempty"`
 	SourcePvcName      string `json:"sourcePvcName,omitempty"`
-	SourcePvcNamespace string `json:"sourcePvcNamespace,omitempty"`
 	SecretName         string `json:"secretName,omitempty"`
 	RequestedMemory    string `json:"requestedMemory,omitempty"`
 	RequestedCPU       uint32 `json:"requestedCPU,omitempty"`
+	RequestedStorage   string `json:"requestedStorage,omitempty"`
 	MachineType        string `json:"machineType,omitempty"`
 	StorageClassName   string `json:"storageClassName,omitempty"`
 	IgnitionSecretName string `json:"ignitionSecretName,omitempty"`

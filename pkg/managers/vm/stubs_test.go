@@ -1,6 +1,7 @@
 package vm
 
 import (
+	"context"
 	"fmt"
 
 	apiresource "k8s.io/apimachinery/pkg/api/resource"
@@ -66,7 +67,7 @@ func stubMachineScope(machine *machinev1.Machine, tenantClusterClient tenantclus
 		return nil, machineapierros.InvalidMachineConfiguration("failed to get machine provider status: %v", err.Error())
 	}
 
-	infraClusterClient, err := infraClusterClientBuilder(tenantClusterClient, providerSpec.CredentialsSecretName, machine.GetNamespace())
+	infraClusterClient, err := infraClusterClientBuilder(context.Background(), tenantClusterClient, providerSpec.CredentialsSecretName, machine.GetNamespace())
 	if err != nil {
 		return nil, machineapierros.InvalidMachineConfiguration("failed to create aKubeVirt client: %v", err.Error())
 	}
@@ -264,7 +265,7 @@ func stubMachine(labels map[string]string, providerID string, useDefaultCredenti
 			ClusterName: clusterName,
 		},
 		Spec: machinev1.MachineSpec{
-			ObjectMeta:   metav1.ObjectMeta{},
+			ObjectMeta:   machinev1.ObjectMeta{},
 			ProviderSpec: machinev1.ProviderSpec{Value: providerSpecValue},
 			ProviderID:   &providerID,
 		},

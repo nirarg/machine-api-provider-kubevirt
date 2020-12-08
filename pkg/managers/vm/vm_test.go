@@ -1,6 +1,7 @@
 package vm
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"testing"
@@ -104,7 +105,7 @@ func TestCreate(t *testing.T) {
 				t.Fatalf("Unable to create the stub machine object")
 			}
 
-			infraClusterClientMockBuilder := func(tenantClusterClient tenantcluster.Client, secretName, namespace string) (infracluster.Client, error) {
+			infraClusterClientMockBuilder := func(ctx context.Context, tenantClusterClient tenantcluster.Client, secretName, namespace string) (infracluster.Client, error) {
 				return newMockInfraClusterClient, nil
 			}
 
@@ -122,13 +123,13 @@ func TestCreate(t *testing.T) {
 			returnVM.Status.Ready = tc.wantVMToBeReady
 
 			// TODO: test negative flow, return err != nil
-			newMockInfraClusterClient.EXPECT().CreateSecret(clusterID, ignitionSecret).Return(returnSecret, tc.ClientCreateSecretError).AnyTimes()
-			newMockInfraClusterClient.EXPECT().CreateVirtualMachine(clusterID, virtualMachine).Return(returnVM, tc.ClientCreateVMError).AnyTimes()
-			newMockInfraClusterClient.EXPECT().GetVirtualMachineInstance(clusterID, virtualMachine.Name, gomock.Any()).Return(vmi, nil).AnyTimes()
+			newMockInfraClusterClient.EXPECT().CreateSecret(context.Background(), clusterID, ignitionSecret).Return(returnSecret, tc.ClientCreateSecretError).AnyTimes()
+			newMockInfraClusterClient.EXPECT().CreateVirtualMachine(context.Background(), clusterID, virtualMachine).Return(returnVM, tc.ClientCreateVMError).AnyTimes()
+			newMockInfraClusterClient.EXPECT().GetVirtualMachineInstance(context.Background(), clusterID, virtualMachine.Name, gomock.Any()).Return(vmi, nil).AnyTimes()
 
 			newMockTenantClusterClient.EXPECT().PatchMachine(machine, machine.DeepCopy()).Return(nil).AnyTimes()
 			newMockTenantClusterClient.EXPECT().StatusPatchMachine(machine, machine.DeepCopy()).Return(nil).AnyTimes()
-			newMockTenantClusterClient.EXPECT().GetSecret(workerUserDataSecretName, machine.Namespace).Return(stubSecret(), nil).AnyTimes()
+			newMockTenantClusterClient.EXPECT().GetSecret(context.Background(), workerUserDataSecretName, machine.Namespace).Return(stubSecret(), nil).AnyTimes()
 			newMockTenantClusterClient.EXPECT().GetNamespace().Return(clusterNamespace, nil).AnyTimes()
 			newMockTenantClusterClient.EXPECT().GetInfraID().Return(infraID, nil).AnyTimes()
 
@@ -240,7 +241,7 @@ func TestDelete(t *testing.T) {
 				t.Fatalf("Unable to create the stub machine object")
 			}
 
-			infraClusterClientMockBuilder := func(tenantClusterClient tenantcluster.Client, secretName, namespace string) (infracluster.Client, error) {
+			infraClusterClientMockBuilder := func(ctx context.Context, tenantClusterClient tenantcluster.Client, secretName, namespace string) (infracluster.Client, error) {
 				return newMockInfraClusterClient, nil
 			}
 
@@ -258,15 +259,15 @@ func TestDelete(t *testing.T) {
 			}
 
 			//InfraCluster mocks
-			newMockInfraClusterClient.EXPECT().GetVirtualMachine(clusterID, virtualMachine.Name, gomock.Any()).Return(returnVM, tc.clientGetVMError).AnyTimes()
-			newMockInfraClusterClient.EXPECT().DeleteVirtualMachine(clusterID, virtualMachine.Name, gomock.Any()).Return(tc.clientDeleteVMError).AnyTimes()
-			newMockInfraClusterClient.EXPECT().GetVirtualMachineInstance(clusterID, virtualMachine.Name, gomock.Any()).Return(vmi, nil).AnyTimes()
+			newMockInfraClusterClient.EXPECT().GetVirtualMachine(context.Background(), clusterID, virtualMachine.Name, gomock.Any()).Return(returnVM, tc.clientGetVMError).AnyTimes()
+			newMockInfraClusterClient.EXPECT().DeleteVirtualMachine(context.Background(), clusterID, virtualMachine.Name, gomock.Any()).Return(tc.clientDeleteVMError).AnyTimes()
+			newMockInfraClusterClient.EXPECT().GetVirtualMachineInstance(context.Background(), clusterID, virtualMachine.Name, gomock.Any()).Return(vmi, nil).AnyTimes()
 
 			//TenantCluster mocks
 			// TODO: test negative flow, return err != nil
 			newMockTenantClusterClient.EXPECT().PatchMachine(machine, machine.DeepCopy()).Return(nil).AnyTimes()
 			newMockTenantClusterClient.EXPECT().StatusPatchMachine(machine, machine.DeepCopy()).Return(nil).AnyTimes()
-			newMockTenantClusterClient.EXPECT().GetSecret(workerUserDataSecretName, machine.Namespace).Return(stubSecret(), nil).AnyTimes()
+			newMockTenantClusterClient.EXPECT().GetSecret(context.Background(), workerUserDataSecretName, machine.Namespace).Return(stubSecret(), nil).AnyTimes()
 			newMockTenantClusterClient.EXPECT().GetNamespace().Return("kubevirt-actuator-cluster", nil).AnyTimes()
 			newMockTenantClusterClient.EXPECT().GetInfraID().Return(infraID, nil).AnyTimes()
 
@@ -346,7 +347,7 @@ func TestExists(t *testing.T) {
 				t.Fatalf("Unable to create the stub machine object")
 			}
 
-			infraClusterClientMockBuilder := func(tenantClusterClient tenantcluster.Client, secretName, namespace string) (infracluster.Client, error) {
+			infraClusterClientMockBuilder := func(ctx context.Context, tenantClusterClient tenantcluster.Client, secretName, namespace string) (infracluster.Client, error) {
 				return newMockInfraClusterClient, nil
 			}
 
@@ -364,9 +365,9 @@ func TestExists(t *testing.T) {
 			}
 
 			//InfraCluster mocks
-			newMockInfraClusterClient.EXPECT().GetVirtualMachine(clusterID, virtualMachine.Name, gomock.Any()).Return(returnVM, tc.clientGetError).AnyTimes()
-			newMockInfraClusterClient.EXPECT().GetVirtualMachineInstance(clusterID, virtualMachine.Name, gomock.Any()).Return(vmi, nil).AnyTimes()
-			newMockTenantClusterClient.EXPECT().GetSecret(workerUserDataSecretName, machine.Namespace).Return(stubSecret(), nil).AnyTimes()
+			newMockInfraClusterClient.EXPECT().GetVirtualMachine(context.Background(), clusterID, virtualMachine.Name, gomock.Any()).Return(returnVM, tc.clientGetError).AnyTimes()
+			newMockInfraClusterClient.EXPECT().GetVirtualMachineInstance(context.Background(), clusterID, virtualMachine.Name, gomock.Any()).Return(vmi, nil).AnyTimes()
+			newMockTenantClusterClient.EXPECT().GetSecret(context.Background(), workerUserDataSecretName, machine.Namespace).Return(stubSecret(), nil).AnyTimes()
 			newMockTenantClusterClient.EXPECT().GetNamespace().Return("kubevirt-actuator-cluster", nil).AnyTimes()
 			newMockTenantClusterClient.EXPECT().GetInfraID().Return(infraID, nil).AnyTimes()
 
@@ -493,7 +494,7 @@ func TestUpdate(t *testing.T) {
 				t.Fatalf("Unable to create the stub machine object")
 			}
 
-			infraClusterClientMockBuilder := func(tenantClusterClient tenantcluster.Client, secretName, namespace string) (infracluster.Client, error) {
+			infraClusterClientMockBuilder := func(ctx context.Context, tenantClusterClient tenantcluster.Client, secretName, namespace string) (infracluster.Client, error) {
 				return newMockInfraClusterClient, nil
 			}
 
@@ -523,14 +524,14 @@ func TestUpdate(t *testing.T) {
 				Ready:   tc.wantVMToBeReady,
 			}
 
-			newMockInfraClusterClient.EXPECT().GetVirtualMachine(clusterID, virtualMachine.Name, gomock.Any()).Return(getReturnVM, tc.clientGetVMError).AnyTimes()
-			newMockInfraClusterClient.EXPECT().UpdateVirtualMachine(clusterID, getReturnVM).Return(updateReturnVM, tc.clientUpdateVMError).AnyTimes()
-			newMockInfraClusterClient.EXPECT().GetVirtualMachineInstance(clusterID, virtualMachine.Name, gomock.Any()).Return(vmi, nil).AnyTimes()
+			newMockInfraClusterClient.EXPECT().GetVirtualMachine(context.Background(), clusterID, virtualMachine.Name, gomock.Any()).Return(getReturnVM, tc.clientGetVMError).AnyTimes()
+			newMockInfraClusterClient.EXPECT().UpdateVirtualMachine(context.Background(), clusterID, getReturnVM).Return(updateReturnVM, tc.clientUpdateVMError).AnyTimes()
+			newMockInfraClusterClient.EXPECT().GetVirtualMachineInstance(context.Background(), clusterID, virtualMachine.Name, gomock.Any()).Return(vmi, nil).AnyTimes()
 
 			// TODO: test negative flow, return err != nil
 			newMockTenantClusterClient.EXPECT().PatchMachine(machine, machine.DeepCopy()).Return(nil).AnyTimes()
 			newMockTenantClusterClient.EXPECT().StatusPatchMachine(machine, machine.DeepCopy()).Return(nil).AnyTimes()
-			newMockTenantClusterClient.EXPECT().GetSecret(workerUserDataSecretName, machine.Namespace).Return(stubSecret(), nil).AnyTimes()
+			newMockTenantClusterClient.EXPECT().GetSecret(context.Background(), workerUserDataSecretName, machine.Namespace).Return(stubSecret(), nil).AnyTimes()
 			newMockTenantClusterClient.EXPECT().GetNamespace().Return("kubevirt-actuator-cluster", nil).AnyTimes()
 			newMockTenantClusterClient.EXPECT().GetInfraID().Return(infraID, nil).AnyTimes()
 

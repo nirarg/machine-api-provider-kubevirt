@@ -80,7 +80,7 @@ func FormatProviderID(namespace, name string) string {
 }
 
 func (r *providerIDReconciler) getVMName(nodeName string) (string, error) {
-	vmi, err := r.infraClusterClient.GetVirtualMachineInstance(r.infraClusterNamespace, nodeName, &v1.GetOptions{})
+	vmi, err := r.infraClusterClient.GetVirtualMachineInstance(context.Background(), r.infraClusterNamespace, nodeName, &v1.GetOptions{})
 	if err != nil {
 		return "", err
 	}

@@ -1,6 +1,7 @@
 package vm
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"time"
@@ -75,7 +76,7 @@ func newMachineScope(machine *machinev1.Machine, tenantClusterClient tenantclust
 		return nil, machinecontroller.InvalidMachineConfiguration("failed to get machine provider status: %v", err.Error())
 	}
 
-	infraClusterClient, err := infraClusterClientBuilder(tenantClusterClient, providerSpec.CredentialsSecretName, machine.GetNamespace())
+	infraClusterClient, err := infraClusterClientBuilder(context.Background(), tenantClusterClient, providerSpec.CredentialsSecretName, machine.GetNamespace())
 	if err != nil {
 		return nil, machinecontroller.InvalidMachineConfiguration("failed to create aKubeVirt client: %v", err.Error())
 	}
@@ -346,7 +347,7 @@ func buildIgnitionSecretName(virtualMachineName string) string {
 
 func (s *machineScope) getUserData(namespace string, virtualMachineName string) ([]byte, error) {
 	secretName := s.machineProviderSpec.IgnitionSecretName
-	userDataSecret, err := s.tenantClusterClient.GetSecret(secretName, s.machine.GetNamespace())
+	userDataSecret, err := s.tenantClusterClient.GetSecret(context.Background(), secretName, s.machine.GetNamespace())
 	if err != nil {
 		if apimachineryerrors.IsNotFound(err) {
 			return nil, machinecontroller.InvalidMachineConfiguration("Tenant-cluster credentials secret %s/%s: %v not found", namespace, secretName, err)

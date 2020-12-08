@@ -14,6 +14,7 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"flag"
 	"os"
 	"time"
@@ -130,13 +131,18 @@ func main() {
 	}
 
 	// Initialize tenant-cluster clients
-	kubernetesClient, err := tenantcluster.New(mgr)
+	tenantClusterClient, err := tenantcluster.New(mgr)
 	if err != nil {
 		entryLog.Error(err, "Failed to create tenantcluster client from configuration")
 	}
 
+	infraClusterClient, err := infracluster.New(context.Background(), tenantClusterClient)
+	if err != nil {
+		entryLog.Error(err, "Failed to create infracluster client from configuration")
+	}
+
 	// Initialize provider vm manager (infraClusterClientBuilder would be the function infracluster.New)
-	providerVM := vm.New(infracluster.New, kubernetesClient)
+	providerVM := vm.New(infraClusterClient, tenantClusterClient)
 
 	// Initialize machine actuator.
 	machineActuator := actuator.New(providerVM, mgr.GetEventRecorderFor("kubevirtcontroller"))
@@ -147,7 +153,7 @@ func main() {
 	}
 
 	// Register the providerID controller
-	providerid.Add(mgr, manager.Options{})
+	providerid.Add(mgr, tenantClusterClient, infraClusterClient)
 
 	if err := mgr.AddReadyzCheck("ping", healthz.Ping); err != nil {
 		klog.Fatal(err)

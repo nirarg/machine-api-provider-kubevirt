@@ -61,7 +61,7 @@ type machineScope struct {
 	infraID               string
 }
 
-func newMachineScope(machine *machinev1.Machine, tenantClusterClient tenantcluster.Client, infraClusterClientBuilder infracluster.ClientBuilderFuncType) (*machineScope, error) {
+func newMachineScope(machine *machinev1.Machine, tenantClusterClient tenantcluster.Client, infraClusterClient infracluster.Client) (*machineScope, error) {
 	if err := validateMachine(*machine); err != nil {
 		return nil, fmt.Errorf("%v: failed validating machine provider spec: %w", machine.GetName(), err)
 	}
@@ -74,11 +74,6 @@ func newMachineScope(machine *machinev1.Machine, tenantClusterClient tenantclust
 	providerStatus, err := kubevirtproviderv1alpha1.ProviderStatusFromRawExtension(machine.Status.ProviderStatus)
 	if err != nil {
 		return nil, machinecontroller.InvalidMachineConfiguration("failed to get machine provider status: %v", err.Error())
-	}
-
-	infraClusterClient, err := infraClusterClientBuilder(context.Background(), tenantClusterClient, providerSpec.CredentialsSecretName, machine.GetNamespace())
-	if err != nil {
-		return nil, machinecontroller.InvalidMachineConfiguration("failed to create aKubeVirt client: %v", err.Error())
 	}
 
 	vmNamespace, err := tenantClusterClient.GetNamespace()

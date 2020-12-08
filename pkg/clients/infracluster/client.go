@@ -43,9 +43,6 @@ const (
 	defaultCredentialsSecretSecretNamespace = "openshift-machine-api"
 )
 
-// ClientBuilderFuncType is function type for building infra-cluster clients
-type ClientBuilderFuncType func(ctx context.Context, tenantClusterKubernetesClient tenantcluster.Client, CredentialsSecretSecretName, namespace string) (Client, error)
-
 // Client is a wrapper object for actual infra-cluster clients: kubernetes and the kubevirt
 type Client interface {
 	CreateVirtualMachine(ctx context.Context, namespace string, newVM *kubevirtapiv1.VirtualMachine) (*kubevirtapiv1.VirtualMachine, error)
@@ -66,7 +63,7 @@ var (
 	vmiRes = schema.GroupVersionResource{
 		Group:    kubevirtapiv1.GroupVersion.Group,
 		Version:  kubevirtapiv1.GroupVersion.Version,
-		Resource: "virtualmachinesinstance",
+		Resource: "virtualmachineinstances",
 	}
 )
 
@@ -76,28 +73,18 @@ type client struct {
 }
 
 // New creates our client wrapper object for the actual kubeVirt and kubernetes clients we use.
-func New(ctx context.Context, tenantClusterKubernetesClient tenantcluster.Client, CredentialsSecretSecretName, namespace string) (Client, error) {
-	CredentialsSecretSecretNamespace := namespace
-	if CredentialsSecretSecretName == "" {
-		CredentialsSecretSecretName = defaultCredentialsSecretSecretName
-		CredentialsSecretSecretNamespace = defaultCredentialsSecretSecretNamespace
-	}
-
-	if namespace == "" {
-		return nil, machineapiapierrors.InvalidMachineConfiguration("Infra-cluster credentials secret - Invalid empty namespace")
-	}
-
-	returnedSecret, err := tenantClusterKubernetesClient.GetSecret(ctx, CredentialsSecretSecretName, CredentialsSecretSecretNamespace)
+func New(ctx context.Context, tenantClusterKubernetesClient tenantcluster.Client) (Client, error) {
+	returnedSecret, err := tenantClusterKubernetesClient.GetSecret(ctx, defaultCredentialsSecretSecretName, defaultCredentialsSecretSecretNamespace)
 	if err != nil {
 		if apimachineryerrors.IsNotFound(err) {
-			return nil, machineapiapierrors.InvalidMachineConfiguration("Infra-cluster credentials secret %s/%s: %v not found", CredentialsSecretSecretNamespace, CredentialsSecretSecretName, err)
+			return nil, machineapiapierrors.InvalidMachineConfiguration("Infra-cluster credentials secret %s/%s: %v not found", defaultCredentialsSecretSecretName, defaultCredentialsSecretSecretNamespace, err)
 		}
 		return nil, err
 	}
 	platformCredentials, ok := returnedSecret.Data[platformCredentialsKey]
 	if !ok {
 		return nil, machineapiapierrors.InvalidMachineConfiguration("Infra-cluster credentials secret %v did not contain key %v",
-			CredentialsSecretSecretName, platformCredentials)
+			defaultCredentialsSecretSecretName, platformCredentials)
 	}
 
 	clientConfig, err := clientcmd.NewClientConfigFromBytes(platformCredentials)

@@ -29,6 +29,7 @@ import (
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
+/// [MachineSet]
 // MachineSet ensures that a specified number of machines replicas are running at any given time.
 // +k8s:openapi-gen=true
 // +kubebuilder:subresource:status
@@ -46,6 +47,9 @@ type MachineSet struct {
 	Status MachineSetStatus `json:"status,omitempty"`
 }
 
+/// [MachineSet]
+
+/// [MachineSetSpec]
 // MachineSetSpec defines the desired state of MachineSet
 type MachineSetSpec struct {
 	// Replicas is the number of desired replicas.
@@ -100,6 +104,9 @@ const (
 	OldestMachineSetDeletePolicy MachineSetDeletePolicy = "Oldest"
 )
 
+/// [MachineSetSpec] // doxygen marker
+
+/// [MachineTemplateSpec] // doxygen marker
 // MachineTemplateSpec describes the data needed to create a Machine from a template
 type MachineTemplateSpec struct {
 	// Standard object's metadata.
@@ -113,6 +120,9 @@ type MachineTemplateSpec struct {
 	Spec MachineSpec `json:"spec,omitempty"`
 }
 
+/// [MachineTemplateSpec]
+
+/// [MachineSetStatus]
 // MachineSetStatus defines the observed state of MachineSet
 type MachineSetStatus struct {
 	// Replicas is the most recently observed number of replicas.
@@ -157,6 +167,8 @@ type MachineSetStatus struct {
 	// +optional
 	ErrorMessage *string `json:"errorMessage,omitempty"`
 }
+
+/// [MachineSetStatus]
 
 func (m *MachineSet) Validate() field.ErrorList {
 	errors := field.ErrorList{}

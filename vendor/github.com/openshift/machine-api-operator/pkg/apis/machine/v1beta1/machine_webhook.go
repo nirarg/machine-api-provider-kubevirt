@@ -149,7 +149,6 @@ type machineAdmissionFn func(m *Machine, config *admissionConfig) (bool, []strin
 
 type admissionConfig struct {
 	clusterID       string
-	platformStatus  *osconfigv1.PlatformStatus
 	dnsDisconnected bool
 }
 
@@ -198,7 +197,6 @@ func createMachineValidator(infra *osconfigv1.Infrastructure, dns *osconfigv1.DN
 	admissionConfig := &admissionConfig{
 		dnsDisconnected: dns.Spec.PublicZone == nil,
 		clusterID:       infra.Status.InfrastructureName,
-		platformStatus:  infra.Status.PlatformStatus,
 	}
 	return &machineValidatorHandler{
 		admissionHandler: &admissionHandler{
@@ -616,7 +614,7 @@ func validateAWS(m *Machine, config *admissionConfig) (bool, []string, utilerror
 	// TODO(alberto): Validate providerSpec.BlockDevices.
 	// https://github.com/openshift/cluster-api-provider-aws/pull/299#discussion_r433920532
 
-	switch providerSpec.Placement.Tenancy {
+	switch providerSpec.Tenancy {
 	case "", aws.DefaultTenancy, aws.DedicatedTenancy, aws.HostTenancy:
 		// Do nothing, valid values
 	default:
@@ -624,7 +622,7 @@ func validateAWS(m *Machine, config *admissionConfig) (bool, []string, utilerror
 			errs,
 			field.Invalid(
 				field.NewPath("providerSpec", "tenancy"),
-				providerSpec.Placement.Tenancy,
+				providerSpec.Tenancy,
 				fmt.Sprintf("Invalid providerSpec.tenancy, the only allowed options are: %s, %s, %s", aws.DefaultTenancy, aws.DedicatedTenancy, aws.HostTenancy),
 			),
 		)
@@ -741,10 +739,6 @@ func validateAzure(m *Machine, config *admissionConfig) (bool, []string, utilerr
 
 	if providerSpec.OSDisk.DiskSizeGB <= 0 || providerSpec.OSDisk.DiskSizeGB >= azureMaxDiskSizeGB {
 		errs = append(errs, field.Invalid(field.NewPath("providerSpec", "osDisk", "diskSizeGB"), providerSpec.OSDisk.DiskSizeGB, "diskSizeGB must be greater than zero and less than 32768"))
-	}
-
-	if isAzureGovCloud(config.platformStatus) && providerSpec.SpotVMOptions != nil {
-		warnings = append(warnings, "spot VMs may not be supported when using GovCloud region")
 	}
 
 	if len(errs) > 0 {
@@ -1104,9 +1098,4 @@ func validateVSphereNetwork(network vsphere.NetworkSpec, parentPath *field.Path)
 	}
 
 	return errs
-}
-
-func isAzureGovCloud(platformStatus *osconfigv1.PlatformStatus) bool {
-	return platformStatus != nil && platformStatus.Azure != nil &&
-		platformStatus.Azure.CloudName != osconfigv1.AzurePublicCloud
 }

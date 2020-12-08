@@ -32,23 +32,14 @@ func NewMachineSetValidator() (*machineSetValidatorHandler, error) {
 		return nil, err
 	}
 
-	dns, err := getDNS()
-	if err != nil {
-		return nil, err
-	}
-
-	return createMachineSetValidator(infra, dns), nil
+	return createMachineSetValidator(infra.Status.PlatformStatus.Type, infra.Status.InfrastructureName), nil
 }
 
-func createMachineSetValidator(infra *osconfigv1.Infrastructure, dns *osconfigv1.DNS) *machineSetValidatorHandler {
-	admissionConfig := &admissionConfig{
-		dnsDisconnected: dns.Spec.PublicZone == nil,
-		clusterID:       infra.Status.InfrastructureName,
-	}
+func createMachineSetValidator(platform osconfigv1.PlatformType, clusterID string) *machineSetValidatorHandler {
 	return &machineSetValidatorHandler{
 		admissionHandler: &admissionHandler{
-			admissionConfig:   admissionConfig,
-			webhookOperations: getMachineValidatorOperation(infra.Status.PlatformStatus.Type),
+			admissionConfig:   &admissionConfig{clusterID: clusterID},
+			webhookOperations: getMachineValidatorOperation(platform),
 		},
 	}
 }

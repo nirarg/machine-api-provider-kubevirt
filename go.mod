@@ -4,8 +4,9 @@ go 1.15
 
 require (
 	github.com/blang/semver v3.5.1+incompatible
+	github.com/go-logr/zapr v0.2.0 // indirect
 	github.com/golang/mock v1.4.4
-	github.com/openshift/machine-api-operator v0.2.1-0.20201207193009-44f29cc5bc76
+	github.com/openshift/machine-api-operator v0.2.1-0.20201111151924-77300d0c997a
 	github.com/pkg/errors v0.9.1
 	gotest.tools v2.2.0+incompatible
 	k8s.io/api v0.19.2

@@ -40,6 +40,7 @@ const (
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
+/// [Machine]
 // Machine is the Schema for the machines API
 // +k8s:openapi-gen=true
 // +kubebuilder:subresource:status
@@ -59,6 +60,9 @@ type Machine struct {
 	Status MachineStatus `json:"status,omitempty"`
 }
 
+/// [Machine]
+
+/// [MachineSpec]
 // MachineSpec defines the desired state of Machine
 type MachineSpec struct {
 	// ObjectMeta will autopopulate the Node created. Use this to
@@ -94,6 +98,9 @@ type MachineSpec struct {
 	ProviderID *string `json:"providerID,omitempty"`
 }
 
+/// [MachineSpec]
+
+/// [MachineStatus]
 // MachineStatus defines the observed state of Machine
 type MachineStatus struct {
 	// NodeRef will point to the corresponding Node if it exists.
@@ -183,6 +190,8 @@ type LastOperation struct {
 	// E.g. Create, Delete, Update etc
 	Type *string `json:"type,omitempty"`
 }
+
+/// [MachineVersionInfo]
 
 func (m *Machine) Validate() field.ErrorList {
 	errors := field.ErrorList{}

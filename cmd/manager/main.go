@@ -141,8 +141,11 @@ func main() {
 	kubevirtVM := kubevirt.New(infraClusterClient)
 
 	// Initialize machine actuator.
-	machineActuator := actuator.New(kubevirtVM, mgr.GetEventRecorderFor("kubevirtcontroller"),
+	machineActuator, err := actuator.New(kubevirtVM, mgr.GetEventRecorderFor("kubevirtcontroller"),
 		machineScopeCreator, tenantClusterClient)
+	if err != nil {
+		klog.Fatalf("Error creating actuator: %v", err)
+	}
 
 	// Register Actuator on machine-controller
 	if err := machine.AddWithActuator(mgr, machineActuator); err != nil {

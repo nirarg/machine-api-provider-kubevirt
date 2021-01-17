@@ -21,9 +21,18 @@ import (
 
 	"github.com/openshift/cluster-api-provider-kubevirt/pkg/clients/infracluster"
 	"github.com/openshift/cluster-api-provider-kubevirt/pkg/clients/tenantcluster"
+	machinecontroller "github.com/openshift/machine-api-operator/pkg/controller/machine"
 )
 
 const IDFormat = "kubevirt://%s/%s"
+
+const (
+	ConfigMapNamespace             = "openshift-config"
+	ConfigMapName                  = "cloud-provider-config"
+	ConfigMapDataKeyName           = "config"
+	ConfigMapInfraNamespaceKeyName = "namespace"
+	ConfigMapInfraIDKeyName        = "infraID"
+)
 
 var _ reconcile.Reconciler = &providerIDReconciler{}
 
@@ -57,13 +66,18 @@ func (r *providerIDReconciler) Reconcile(request reconcile.Request) (reconcile.R
 		return reconcile.Result{}, nil
 	}
 
-	klog.Info("spec.ProviderID is empty, fetching from the infra-cluster", "node", request.NamespacedName)
-	id, err := r.getVMName(node.Name)
+	cMap, err := r.tenantClusterClient.GetConfigMapValue(context.Background(), ConfigMapName, ConfigMapNamespace, ConfigMapDataKeyName)
 	if err != nil {
-		return reconcile.Result{}, err
+		return reconcile.Result{}, nil
+	}
+	infraClusterNamespace, ok := (*cMap)[ConfigMapInfraNamespaceKeyName]
+	if !ok {
+		return reconcile.Result{}, machinecontroller.InvalidMachineConfiguration("ProviderID: configMap %s/%s: The map extracted with key %s doesn't contain key %s",
+			ConfigMapNamespace, ConfigMapName, ConfigMapDataKeyName, ConfigMapInfraNamespaceKeyName)
 	}
 
-	infraClusterNamespace, err := r.tenantClusterClient.GetNamespace()
+	klog.Info("spec.ProviderID is empty, fetching from the infra-cluster", "node", request.NamespacedName)
+	id, err := r.getVMName(node.Name, infraClusterNamespace)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
@@ -83,11 +97,7 @@ func FormatProviderID(namespace, name string) string {
 	return fmt.Sprintf(IDFormat, namespace, name)
 }
 
-func (r *providerIDReconciler) getVMName(nodeName string) (string, error) {
-	infraClusterNamespace, err := r.tenantClusterClient.GetNamespace()
-	if err != nil {
-		return "", err
-	}
+func (r *providerIDReconciler) getVMName(nodeName string, infraClusterNamespace string) (string, error) {
 	vmi, err := r.infraClusterClient.GetVirtualMachineInstance(context.Background(), infraClusterNamespace, nodeName, &v1.GetOptions{})
 	if err != nil {
 		return "", err

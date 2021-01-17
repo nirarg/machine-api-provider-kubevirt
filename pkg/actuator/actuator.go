@@ -42,37 +42,56 @@ const (
 	userDataKey       = "userData"
 )
 
+const (
+	ConfigMapNamespace             = "openshift-config"
+	ConfigMapName                  = "cloud-provider-config"
+	ConfigMapDataKeyName           = "config"
+	ConfigMapInfraNamespaceKeyName = "namespace"
+	ConfigMapInfraIDKeyName        = "infraID"
+)
+
 // Actuator is responsible for performing machine reconciliation.
 type Actuator struct {
 	eventRecorder       record.EventRecorder
 	kubevirtVM          kubevirt.KubevirtVM
 	machineScopeCreator machinescope.MachineScopeCreator
 	tenantClusterClient tenantcluster.Client
+	infraID             string
+	infraNamespace      string
 }
 
 // New returns an actuator.
 func New(kubevirtVM kubevirt.KubevirtVM,
 	eventRecorder record.EventRecorder,
 	machineScopeCreator machinescope.MachineScopeCreator,
-	tenantClusterClient tenantcluster.Client) *Actuator {
+	tenantClusterClient tenantcluster.Client) (*Actuator, error) {
+
+	cMap, err := tenantClusterClient.GetConfigMapValue(context.Background(), ConfigMapName, ConfigMapNamespace, ConfigMapDataKeyName)
+	if err != nil {
+		return nil, nil
+	}
+	infraID, ok := (*cMap)[ConfigMapInfraIDKeyName]
+	if !ok {
+		return nil, machinecontroller.InvalidMachineConfiguration("Actuator: configMap %s/%s: The map extracted with key %s doesn't contain key %s",
+			ConfigMapNamespace, ConfigMapName, ConfigMapDataKeyName, ConfigMapInfraIDKeyName)
+	}
+	infraNamespace, ok := (*cMap)[ConfigMapInfraNamespaceKeyName]
+	if !ok {
+		return nil, machinecontroller.InvalidMachineConfiguration("Actuator: configMap %s/%s: The map extracted with key %s doesn't contain key %s",
+			ConfigMapNamespace, ConfigMapName, ConfigMapDataKeyName, ConfigMapInfraNamespaceKeyName)
+	}
 	return &Actuator{
 		kubevirtVM:          kubevirtVM,
 		eventRecorder:       eventRecorder,
 		machineScopeCreator: machineScopeCreator,
 		tenantClusterClient: tenantClusterClient,
-	}
+		infraID:             infraID,
+		infraNamespace:      infraNamespace,
+	}, nil
 }
 
 func (a *Actuator) createMachineScope(machine *machinev1.Machine) (machinescope.MachineScope, error) {
-	infraNamespace, err := a.tenantClusterClient.GetNamespace()
-	if err != nil {
-		return nil, err
-	}
-	infraID, err := a.tenantClusterClient.GetInfraID()
-	if err != nil {
-		return nil, err
-	}
-	return a.machineScopeCreator.CreateMachineScope(machine, infraNamespace, infraID)
+	return a.machineScopeCreator.CreateMachineScope(machine, a.infraNamespace, a.infraID)
 }
 
 // Set corresponding event based on error. It also returns the original error

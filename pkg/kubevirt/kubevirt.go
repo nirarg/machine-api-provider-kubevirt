@@ -23,6 +23,7 @@ const (
 	masterLabel              = "node-role.kubevirt.io/master"
 )
 
+//go:generate mockgen -source=./kubevirt.go -destination=./mock/kubevirt_generated.go -package=mock
 // KubevirtVM runs the logic to reconciles a machine resource towards its desired state
 type KubevirtVM interface {
 	Create(machineScope machinescope.MachineScope, userData []byte) error

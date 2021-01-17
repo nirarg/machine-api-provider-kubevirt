@@ -53,6 +53,7 @@ func New() MachineScopeCreator {
 	return machineScopeCreator{}
 }
 
+//go:generate mockgen -source=./machine_scope.go -destination=./mock/machine_scope_generated.go -package=mock
 type MachineScope interface {
 	UpdateAllowed(requeueAfterSeconds time.Duration) bool
 	CreateIgnitionSecretFromMachine(userData []byte) (*corev1.Secret, error)

@@ -25,8 +25,11 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog"
 
+	"github.com/openshift/cluster-api-provider-kubevirt/pkg/clients/tenantcluster"
 	"github.com/openshift/cluster-api-provider-kubevirt/pkg/kubevirt"
 	"github.com/openshift/cluster-api-provider-kubevirt/pkg/machinescope"
+	machinecontroller "github.com/openshift/machine-api-operator/pkg/controller/machine"
+	apimachineryerrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
 const (
@@ -36,6 +39,7 @@ const (
 	updateEventAction = "Update"
 	deleteEventAction = "Delete"
 	noEventAction     = ""
+	userDataKey       = "userData"
 )
 
 // Actuator is responsible for performing machine reconciliation.
@@ -43,23 +47,38 @@ type Actuator struct {
 	eventRecorder       record.EventRecorder
 	kubevirtVM          kubevirt.KubevirtVM
 	machineScopeCreator machinescope.MachineScopeCreator
+	tenantClusterClient tenantcluster.Client
 }
 
 // New returns an actuator.
 func New(kubevirtVM kubevirt.KubevirtVM,
 	eventRecorder record.EventRecorder,
-	machineScopeCreator machinescope.MachineScopeCreator) *Actuator {
+	machineScopeCreator machinescope.MachineScopeCreator,
+	tenantClusterClient tenantcluster.Client) *Actuator {
 	return &Actuator{
 		kubevirtVM:          kubevirtVM,
 		eventRecorder:       eventRecorder,
 		machineScopeCreator: machineScopeCreator,
+		tenantClusterClient: tenantClusterClient,
 	}
+}
+
+func (a *Actuator) createMachineScope(machine *machinev1.Machine) (machinescope.MachineScope, error) {
+	infraNamespace, err := a.tenantClusterClient.GetNamespace()
+	if err != nil {
+		return nil, err
+	}
+	infraID, err := a.tenantClusterClient.GetInfraID()
+	if err != nil {
+		return nil, err
+	}
+	return a.machineScopeCreator.CreateMachineScope(machine, infraNamespace, infraID)
 }
 
 // Set corresponding event based on error. It also returns the original error
 // for convenience, so callers can do "return handleMachineError(...)".
 func (a *Actuator) handleMachineError(machine *machinev1.Machine, err error, eventAction string) error {
-	machineScope, err := a.machineScopeCreator.CreateMachineScope(machine)
+	machineScope, err := a.createMachineScope(machine)
 	if err != nil {
 		return err
 	}
@@ -73,14 +92,25 @@ func (a *Actuator) handleMachineError(machine *machinev1.Machine, err error, eve
 
 // Create creates a machine and is invoked by the machine controller.
 func (a *Actuator) Create(ctx context.Context, machine *machinev1.Machine) error {
-	machineScope, err := a.machineScopeCreator.CreateMachineScope(machine)
+	originMachineCopy := machine.DeepCopy()
+	machineScope, err := a.createMachineScope(machine)
 	if err != nil {
 		return err
 	}
 
 	klog.Infof("%s: actuator creating machine", machineScope.GetMachineName())
 
-	if err := a.kubevirtVM.Create(machineScope); err != nil {
+	userData, err := a.getUserData(machineScope)
+	if err != nil {
+		fmtErr := fmt.Errorf(vmsFailFmt, machineScope.GetMachineName(), createEventAction, err)
+		return a.handleMachineError(machine, fmtErr, createEventAction)
+	}
+	err = a.kubevirtVM.Create(machineScope, userData)
+	patchErr := a.patchMachine(machineScope.GetMachine(), originMachineCopy)
+	if patchErr != nil {
+		err = patchErr
+	}
+	if err != nil {
 		fmtErr := fmt.Errorf(vmsFailFmt, machineScope.GetMachineName(), createEventAction, err)
 		return a.handleMachineError(machine, fmtErr, createEventAction)
 	}
@@ -89,10 +119,27 @@ func (a *Actuator) Create(ctx context.Context, machine *machinev1.Machine) error
 	return nil
 }
 
+func (a *Actuator) getUserData(machineScope machinescope.MachineScope) ([]byte, error) {
+	secretName := machineScope.GetIgnitionSecretName()
+	machineNamespace := machineScope.GetMachineNamespace()
+	userDataSecret, err := a.tenantClusterClient.GetSecret(context.Background(), secretName, machineNamespace)
+	if err != nil {
+		if apimachineryerrors.IsNotFound(err) {
+			return nil, machinecontroller.InvalidMachineConfiguration("Tenant-cluster credentials secret %s/%s: %v not found", machineNamespace, secretName, err)
+		}
+		return nil, err
+	}
+	userData, ok := userDataSecret.Data[userDataKey]
+	if !ok {
+		return nil, machinecontroller.InvalidMachineConfiguration("Tenant-cluster credentials secret %s/%s: %v doesn't contain the key", machineNamespace, secretName, userDataKey)
+	}
+	return userData, nil
+}
+
 // Exists determines if the given machine currently exists.
 // A machine which is not terminated is considered as existing.
 func (a *Actuator) Exists(ctx context.Context, machine *machinev1.Machine) (bool, error) {
-	machineScope, err := a.machineScopeCreator.CreateMachineScope(machine)
+	machineScope, err := a.createMachineScope(machine)
 	if err != nil {
 		return false, err
 	}
@@ -104,7 +151,8 @@ func (a *Actuator) Exists(ctx context.Context, machine *machinev1.Machine) (bool
 
 // Update attempts to sync machine state with an existing instance.
 func (a *Actuator) Update(ctx context.Context, machine *machinev1.Machine) error {
-	machineScope, err := a.machineScopeCreator.CreateMachineScope(machine)
+	originMachineCopy := machine.DeepCopy()
+	machineScope, err := a.createMachineScope(machine)
 	if err != nil {
 		return err
 	}
@@ -112,6 +160,10 @@ func (a *Actuator) Update(ctx context.Context, machine *machinev1.Machine) error
 	klog.Infof("%s: actuator updating machine", machineScope.GetMachineName())
 
 	wasUpdated, err := a.kubevirtVM.Update(machineScope)
+	patchErr := a.patchMachine(machineScope.GetMachine(), originMachineCopy)
+	if patchErr != nil {
+		err = patchErr
+	}
 	if err != nil {
 
 		fmtErr := fmt.Errorf(vmsFailFmt, machineScope.GetMachineName(), updateEventAction, err)
@@ -128,7 +180,7 @@ func (a *Actuator) Update(ctx context.Context, machine *machinev1.Machine) error
 
 // Delete deletes a machine and updates its finalizer
 func (a *Actuator) Delete(ctx context.Context, machine *machinev1.Machine) error {
-	machineScope, err := a.machineScopeCreator.CreateMachineScope(machine)
+	machineScope, err := a.createMachineScope(machine)
 	if err != nil {
 		return err
 	}
@@ -141,5 +193,28 @@ func (a *Actuator) Delete(ctx context.Context, machine *machinev1.Machine) error
 	}
 
 	a.eventRecorder.Eventf(machine, corev1.EventTypeNormal, deleteEventAction, "Deleted machine %v", machineScope.GetMachineName())
+	return nil
+}
+
+// Patch patches the machine spec and machine status after reconciling.
+func (a *Actuator) patchMachine(machine *machinev1.Machine, originMachineCopy *machinev1.Machine) error {
+
+	klog.V(3).Infof("%v: patching machine", machine.GetName())
+
+	// patch machine
+	statusCopy := *machine.Status.DeepCopy()
+	if err := a.tenantClusterClient.PatchMachine(machine, originMachineCopy); err != nil {
+		klog.Errorf("Failed to patch machine %q: %v", machine.GetName(), err)
+		return err
+	}
+
+	machine.Status = statusCopy
+
+	// patch status
+	if err := a.tenantClusterClient.StatusPatchMachine(machine, originMachineCopy); err != nil {
+		klog.Errorf("Failed to patch machine status %q: %v", machine.GetName(), err)
+		return err
+	}
+
 	return nil
 }

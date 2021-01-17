@@ -1,18 +1,13 @@
 package machinescope
 
 import (
-	"context"
-	"encoding/json"
 	"fmt"
 	"net"
 	"time"
 
-	apimachineryerrors "k8s.io/apimachinery/pkg/api/errors"
-
 	machinecontroller "github.com/openshift/machine-api-operator/pkg/controller/machine"
 
 	kubevirtproviderv1alpha1 "github.com/openshift/cluster-api-provider-kubevirt/pkg/apis/kubevirtprovider/v1alpha1"
-	"github.com/openshift/cluster-api-provider-kubevirt/pkg/clients/tenantcluster"
 	providerctrl "github.com/openshift/cluster-api-provider-kubevirt/pkg/providerid"
 	"github.com/openshift/cluster-api-provider-kubevirt/pkg/utils"
 	machinev1 "github.com/openshift/machine-api-operator/pkg/apis/machine/v1beta1"
@@ -41,7 +36,6 @@ const (
 	defaultCloudInitVolumeDiskName    = "cloudinitdisk"
 	defaultBootVolumeDiskName         = "bootvolume"
 	kubevirtIdAnnotationKey           = "VmId"
-	userDataKey                       = "userData"
 	defaultBus                        = "virtio"
 	APIVersion                        = "kubevirt.io/v1alpha3"
 	Kind                              = "VirtualMachine"
@@ -49,44 +43,36 @@ const (
 	terminationGracePeriodSeconds     = 600
 )
 
-const providerIDFormat = "kubevirt://%s/%s"
-
 type MachineScopeCreator interface {
-	CreateMachineScope(machine *machinev1.Machine) (*machineScope, error)
+	CreateMachineScope(machine *machinev1.Machine, infraNamespace string, infraID string) (MachineScope, error)
 }
 
-type machineScopeCreator struct {
-	tenantClusterClient tenantcluster.Client
-}
+type machineScopeCreator struct{}
 
-func New(tenantClusterClient tenantcluster.Client) MachineScopeCreator {
-	return machineScopeCreator{
-		tenantClusterClient: tenantClusterClient,
-	}
+func New() MachineScopeCreator {
+	return machineScopeCreator{}
 }
 
 type MachineScope interface {
 	UpdateAllowed(requeueAfterSeconds time.Duration) bool
-	CreateIgnitionSecretFromMachine() (*corev1.Secret, error)
+	CreateIgnitionSecretFromMachine(userData []byte) (*corev1.Secret, error)
 	SyncMachineFromVm(vm *kubevirtapiv1.VirtualMachine, vmi *kubevirtapiv1.VirtualMachineInstance) error
 	CreateVirtualMachineFromMachine() (*kubevirtapiv1.VirtualMachine, error)
+	GetMachine() *machinev1.Machine
 	GetMachineName() string
 	GetMachineNamespace() string
-	PatchMachine() error
-	VmNamespace() string
+	GetInfraNamespace() string
+	GetIgnitionSecretName() string
 }
 
 type machineScope struct {
-	tenantClusterClient   tenantcluster.Client
-	machine               *machinev1.Machine
-	originMachineCopy     *machinev1.Machine
-	machineProviderSpec   *kubevirtproviderv1alpha1.KubevirtMachineProviderSpec
-	machineProviderStatus *kubevirtproviderv1alpha1.KubevirtMachineProviderStatus
-	vmNamespace           string
-	infraID               string
+	machine             *machinev1.Machine
+	machineProviderSpec *kubevirtproviderv1alpha1.KubevirtMachineProviderSpec
+	infraNamespace      string
+	infraID             string
 }
 
-func (creator machineScopeCreator) CreateMachineScope(machine *machinev1.Machine) (*machineScope, error) {
+func (creator machineScopeCreator) CreateMachineScope(machine *machinev1.Machine, infraNamespace string, infraID string) (MachineScope, error) {
 	// TODO: insert a validation on machine labels
 	if machine.Labels[machinev1.MachineClusterIDLabel] == "" {
 		return nil, machinecontroller.InvalidMachineConfiguration("%v: missing %q label", machine.GetName(), machinev1.MachineClusterIDLabel)
@@ -97,33 +83,20 @@ func (creator machineScopeCreator) CreateMachineScope(machine *machinev1.Machine
 		return nil, machinecontroller.InvalidMachineConfiguration("failed to get machine config: %v", err)
 	}
 
-	providerStatus, err := kubevirtproviderv1alpha1.ProviderStatusFromRawExtension(machine.Status.ProviderStatus)
 	if err != nil {
 		return nil, machinecontroller.InvalidMachineConfiguration("failed to get machine provider status: %v", err.Error())
 	}
 
-	vmNamespace, err := creator.tenantClusterClient.GetNamespace()
-	if err != nil {
-		return nil, err
-	}
-	infraID, err := creator.tenantClusterClient.GetInfraID()
-	if err != nil {
-		return nil, err
-	}
-
 	return &machineScope{
-		tenantClusterClient:   creator.tenantClusterClient,
-		machine:               machine,
-		originMachineCopy:     machine.DeepCopy(),
-		machineProviderSpec:   providerSpec,
-		machineProviderStatus: providerStatus,
-		vmNamespace:           vmNamespace,
-		infraID:               infraID,
+		machine:             machine,
+		machineProviderSpec: providerSpec,
+		infraNamespace:      infraNamespace,
+		infraID:             infraID,
 	}, nil
 }
 
-func (s *machineScope) VmNamespace() string {
-	return s.vmNamespace
+func (s *machineScope) GetInfraNamespace() string {
+	return s.infraNamespace
 }
 
 func (s *machineScope) CreateVirtualMachineFromMachine() (*kubevirtapiv1.VirtualMachine, error) {
@@ -132,7 +105,7 @@ func (s *machineScope) CreateVirtualMachineFromMachine() (*kubevirtapiv1.Virtual
 	}
 	runAlways := kubevirtapiv1.RunStrategyAlways
 
-	vmiTemplate, err := s.buildVMITemplate(s.vmNamespace)
+	vmiTemplate, err := s.buildVMITemplate(s.infraNamespace)
 	if err != nil {
 		return nil, err
 	}
@@ -164,7 +137,7 @@ func (s *machineScope) CreateVirtualMachineFromMachine() (*kubevirtapiv1.Virtual
 				*buildBootVolumeDataVolumeTemplate(
 					s.machine.GetName(),
 					s.machineProviderSpec.SourcePvcName,
-					s.vmNamespace,
+					s.infraNamespace,
 					s.machineProviderSpec.StorageClassName,
 					pvcRequestsStorage,
 					PVCAccessMode,
@@ -183,7 +156,7 @@ func (s *machineScope) CreateVirtualMachineFromMachine() (*kubevirtapiv1.Virtual
 	virtualMachine.Kind = Kind
 	virtualMachine.ObjectMeta = metav1.ObjectMeta{
 		Name:            s.machine.Name,
-		Namespace:       s.vmNamespace,
+		Namespace:       s.infraNamespace,
 		Labels:          labels,
 		Annotations:     s.machine.Annotations,
 		OwnerReferences: nil,
@@ -303,6 +276,10 @@ func (s *machineScope) buildVMITemplate(namespace string) (*kubevirtapiv1.Virtua
 	return template, nil
 }
 
+func (s *machineScope) GetMachine() *machinev1.Machine {
+	return s.machine
+}
+
 func (s *machineScope) GetMachineName() string {
 	return s.machine.GetName()
 }
@@ -328,20 +305,15 @@ func buildIgnitionSecretName(virtualMachineName string) string {
 	return fmt.Sprintf("%s-ignition", virtualMachineName)
 }
 
-func (s *machineScope) CreateIgnitionSecretFromMachine() (*corev1.Secret, error) {
+func (s *machineScope) CreateIgnitionSecretFromMachine(userData []byte) (*corev1.Secret, error) {
 	virtualMachineName := s.machine.GetName()
 	ignitionSecretName := buildIgnitionSecretName(virtualMachineName)
-	namespace := s.vmNamespace
 	labels := utils.BuildLabels(s.infraID)
-	userData, err := s.getUserData(namespace, virtualMachineName)
-	if err != nil {
-		return nil, err
-	}
 
 	resultSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      ignitionSecretName,
-			Namespace: namespace,
+			Namespace: s.infraNamespace,
 			Labels:    labels,
 		},
 		Data: map[string][]byte{
@@ -352,50 +324,8 @@ func (s *machineScope) CreateIgnitionSecretFromMachine() (*corev1.Secret, error)
 	return resultSecret, nil
 }
 
-func (s *machineScope) getUserData(namespace string, virtualMachineName string) ([]byte, error) {
-	secretName := s.machineProviderSpec.IgnitionSecretName
-	userDataSecret, err := s.tenantClusterClient.GetSecret(context.Background(), secretName, s.machine.GetNamespace())
-	if err != nil {
-		if apimachineryerrors.IsNotFound(err) {
-			return nil, machinecontroller.InvalidMachineConfiguration("Tenant-cluster credentials secret %s/%s: %v not found", namespace, secretName, err)
-		}
-		return nil, err
-	}
-	userDataByte, ok := userDataSecret.Data[userDataKey]
-	if !ok {
-		return nil, machinecontroller.InvalidMachineConfiguration("Tenant-cluster credentials secret %s/%s: %v doesn't contain the key", namespace, secretName, userDataKey)
-	}
-	fullUserData, err := s.addHostnameToUserData(userDataByte, virtualMachineName)
-	if err != nil {
-		return nil, err
-	}
-	return fullUserData, nil
-}
-
-func (s *machineScope) addHostnameToUserData(src []byte, hostname string) ([]byte, error) {
-	var dataMap map[string]interface{}
-	json.Unmarshal([]byte(src), &dataMap)
-	if _, ok := dataMap["storage"]; !ok {
-		dataMap["storage"] = map[string]interface{}{}
-	}
-	storage := (dataMap["storage"]).(map[string]interface{})
-	if _, ok := storage["files"]; !ok {
-		storage["files"] = []map[string]interface{}{}
-	}
-	newFile := map[string]interface{}{
-		"filesystem": "root",
-		"path":       "/etc/hostname",
-		"mode":       420,
-	}
-	newFile["contents"] = map[string]interface{}{
-		"source": fmt.Sprintf("data:,%s", hostname),
-	}
-	storage["files"] = append(storage["files"].([]map[string]interface{}), newFile)
-	result, err := json.Marshal(dataMap)
-	if err != nil {
-		return nil, err
-	}
-	return result, nil
+func (s *machineScope) GetIgnitionSecretName() string {
+	return s.machineProviderSpec.IgnitionSecretName
 }
 
 func buildBootVolumeDataVolumeTemplate(virtualMachineName, pvcName, dvNamespace, storageClassName,
@@ -514,35 +444,6 @@ func (s *machineScope) setMachineAnnotationsAndLabels(vm *kubevirtapiv1.VirtualM
 	return nil
 }
 
-// Patch patches the machine spec and machine status after reconciling.
-func (s *machineScope) PatchMachine() error {
-
-	klog.V(3).Infof("%v: patching machine", s.machine.GetName())
-
-	providerStatus, err := kubevirtproviderv1alpha1.RawExtensionFromProviderStatus(s.machineProviderStatus)
-	if err != nil {
-		return machinecontroller.InvalidMachineConfiguration("failed to get machine provider status: %v", err.Error())
-	}
-	s.machine.Status.ProviderStatus = providerStatus
-
-	// patch machine
-	statusCopy := *s.machine.Status.DeepCopy()
-	if err := s.tenantClusterClient.PatchMachine(s.machine, s.originMachineCopy); err != nil {
-		klog.Errorf("Failed to patch machine %q: %v", s.machine.GetName(), err)
-		return err
-	}
-
-	s.machine.Status = statusCopy
-
-	// patch status
-	if err := s.tenantClusterClient.StatusPatchMachine(s.machine, s.originMachineCopy); err != nil {
-		klog.Errorf("Failed to patch machine status %q: %v", s.machine.GetName(), err)
-		return err
-	}
-
-	return nil
-}
-
 func (s *machineScope) setProviderStatus(vm *kubevirtapiv1.VirtualMachine, vmi *kubevirtapiv1.VirtualMachineInstance, condition kubevirtapiv1.VirtualMachineCondition) error {
 	if vm == nil {
 		klog.Infof("%s: couldn't calculate KubeVirt status - the provided vm is empty", s.machine.GetName())
@@ -550,9 +451,13 @@ func (s *machineScope) setProviderStatus(vm *kubevirtapiv1.VirtualMachine, vmi *
 	}
 	klog.Infof("%s: Updating status", s.machine.GetName())
 	var networkAddresses []corev1.NodeAddress
-	s.machineProviderStatus = &kubevirtproviderv1alpha1.KubevirtMachineProviderStatus{
+	providerStatus, err := kubevirtproviderv1alpha1.RawExtensionFromProviderStatus(&kubevirtproviderv1alpha1.KubevirtMachineProviderStatus{
 		VirtualMachineStatus: vm.Status,
+	})
+	if err != nil {
+		return machinecontroller.InvalidMachineConfiguration("failed to get machine provider status: %v", err.Error())
 	}
+	s.machine.Status.ProviderStatus = providerStatus
 
 	// update nodeAddresses
 	networkAddresses = append(networkAddresses, corev1.NodeAddress{Address: vm.Name, Type: corev1.NodeInternalDNS})

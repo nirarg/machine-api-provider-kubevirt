@@ -135,13 +135,14 @@ func main() {
 	}
 
 	// Initialize machineScope creator
-	machineScopeCreator := machinescope.New(tenantClusterClient)
+	machineScopeCreator := machinescope.New()
 
 	// Initialize provider vm manager (infraClusterClientBuilder would be the function infracluster.New)
-	providerVM := kubevirt.New(infraClusterClient, tenantClusterClient)
+	kubevirtVM := kubevirt.New(infraClusterClient)
 
 	// Initialize machine actuator.
-	machineActuator := actuator.New(providerVM, mgr.GetEventRecorderFor("kubevirtcontroller"), machineScopeCreator)
+	machineActuator := actuator.New(kubevirtVM, mgr.GetEventRecorderFor("kubevirtcontroller"),
+		machineScopeCreator, tenantClusterClient)
 
 	// Register Actuator on machine-controller
 	if err := machine.AddWithActuator(mgr, machineActuator); err != nil {

@@ -2,6 +2,7 @@ package kubevirt
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -10,7 +11,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 
-	"github.com/openshift/cluster-api-provider-kubevirt/pkg/clients/tenantcluster"
 	machinecontroller "github.com/openshift/machine-api-operator/pkg/controller/machine"
 	k8smetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog"
@@ -25,31 +25,32 @@ const (
 
 // KubevirtVM runs the logic to reconciles a machine resource towards its desired state
 type KubevirtVM interface {
-	Create(machineScope machinescope.MachineScope) error
+	Create(machineScope machinescope.MachineScope, userData []byte) error
 	Delete(machineScope machinescope.MachineScope) error
 	Update(machineScope machinescope.MachineScope) (bool, error)
 	Exists(machineScope machinescope.MachineScope) (bool, error)
 }
 
 // manager is the struct which implement KubevirtVM interface
-// Use tenantClusterClient to access secret params assigned by user
 // Use infraClusterClientBuilder to create the infra cluster vms
 type manager struct {
-	infraClusterClient  infracluster.Client
-	tenantClusterClient tenantcluster.Client
+	infraClusterClient infracluster.Client
 }
 
 // New creates provider vm instance
-func New(infraClusterClient infracluster.Client, tenantClusterClient tenantcluster.Client) KubevirtVM {
+func New(infraClusterClient infracluster.Client) KubevirtVM {
 	return &manager{
-		tenantClusterClient: tenantClusterClient,
-		infraClusterClient:  infraClusterClient,
+		infraClusterClient: infraClusterClient,
 	}
 }
 
 // Create creates machine if it does not exists.
-func (m *manager) Create(machineScope machinescope.MachineScope) (resultErr error) {
-	secretFromMachine, err := machineScope.CreateIgnitionSecretFromMachine()
+func (m *manager) Create(machineScope machinescope.MachineScope, userData []byte) (resultErr error) {
+	fullUserData, err := m.addHostnameToUserData(userData, machineScope.GetMachineName())
+	if err != nil {
+		return err
+	}
+	secretFromMachine, err := machineScope.CreateIgnitionSecretFromMachine(fullUserData)
 	if err != nil {
 		return err
 	}
@@ -66,14 +67,6 @@ func (m *manager) Create(machineScope machinescope.MachineScope) (resultErr erro
 	}
 
 	klog.Infof("%s: create machine", machineScope.GetMachineName())
-
-	defer func() {
-		// After the operation is done (success or failure)
-		// Update the machine object with the relevant changes
-		if err := machineScope.PatchMachine(); err != nil {
-			resultErr = err
-		}
-	}()
 
 	createdVM, err := m.createInfraClusterVM(virtualMachineFromMachine, machineScope)
 
@@ -92,6 +85,32 @@ func (m *manager) Create(machineScope machinescope.MachineScope) (resultErr erro
 	}
 
 	return nil
+}
+
+func (m *manager) addHostnameToUserData(src []byte, hostname string) ([]byte, error) {
+	var dataMap map[string]interface{}
+	json.Unmarshal([]byte(src), &dataMap)
+	if _, ok := dataMap["storage"]; !ok {
+		dataMap["storage"] = map[string]interface{}{}
+	}
+	storage := (dataMap["storage"]).(map[string]interface{})
+	if _, ok := storage["files"]; !ok {
+		storage["files"] = []map[string]interface{}{}
+	}
+	newFile := map[string]interface{}{
+		"filesystem": "root",
+		"path":       "/etc/hostname",
+		"mode":       420,
+	}
+	newFile["contents"] = map[string]interface{}{
+		"source": fmt.Sprintf("data:,%s", hostname),
+	}
+	storage["files"] = append(storage["files"].([]map[string]interface{}), newFile)
+	result, err := json.Marshal(dataMap)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 // delete deletes machine
@@ -136,14 +155,6 @@ func (m *manager) Update(machineScope machinescope.MachineScope) (wasUpdated boo
 	}
 
 	klog.Infof("%s: update machine", machineScope.GetMachineName())
-
-	defer func() {
-		// After the operation is done (success or failure)
-		// Update the machine object with the relevant changes
-		if err := machineScope.PatchMachine(); err != nil {
-			resultErr = err
-		}
-	}()
 
 	wasUpdated, updatedVM, err := m.updateVM(err, virtualMachineFromMachine, machineScope)
 	if err != nil {
@@ -211,7 +222,7 @@ func (m *manager) syncMachine(vm *kubevirtapiv1.VirtualMachine, machineScope mac
 // exists returns true if machine exists.
 func (m *manager) Exists(machineScope machinescope.MachineScope) (bool, error) {
 	klog.Infof("%s: check if machine exists", machineScope.GetMachineName())
-	existingVM, err := m.getInraClusterVM(machineScope.GetMachineName(), machineScope.VmNamespace(), machineScope)
+	existingVM, err := m.getInraClusterVM(machineScope.GetMachineName(), machineScope.GetInfraNamespace(), machineScope)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			klog.Infof("%s: VM does not exist", machineScope.GetMachineName())

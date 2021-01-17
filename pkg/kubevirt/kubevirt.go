@@ -88,6 +88,14 @@ func (m *manager) Create(machineScope machinescope.MachineScope, userData []byte
 	return nil
 }
 
+func conditionFailed() kubevirtapiv1.VirtualMachineCondition {
+	return kubevirtapiv1.VirtualMachineCondition{
+		Type:   kubevirtapiv1.VirtualMachineFailure,
+		Status: corev1.ConditionTrue,
+		Reason: "MachineCreationFailed",
+	}
+}
+
 func (m *manager) addHostnameToUserData(src []byte, hostname string) ([]byte, error) {
 	var dataMap map[string]interface{}
 	json.Unmarshal([]byte(src), &dataMap)

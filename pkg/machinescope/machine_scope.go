@@ -56,8 +56,8 @@ func New() MachineScopeCreator {
 //go:generate mockgen -source=./machine_scope.go -destination=./mock/machine_scope_generated.go -package=mock
 type MachineScope interface {
 	UpdateAllowed(requeueAfterSeconds time.Duration) bool
-	CreateIgnitionSecretFromMachine(userData []byte) (*corev1.Secret, error)
-	SyncMachineFromVm(vm *kubevirtapiv1.VirtualMachine, vmi *kubevirtapiv1.VirtualMachineInstance) error
+	CreateIgnitionSecretFromMachine(userData []byte) *corev1.Secret
+	SyncMachine(vm kubevirtapiv1.VirtualMachine, vmi kubevirtapiv1.VirtualMachineInstance) error
 	CreateVirtualMachineFromMachine() (*kubevirtapiv1.VirtualMachine, error)
 	GetMachine() *machinev1.Machine
 	GetMachineName() string
@@ -106,10 +106,7 @@ func (s *machineScope) CreateVirtualMachineFromMachine() (*kubevirtapiv1.Virtual
 	}
 	runAlways := kubevirtapiv1.RunStrategyAlways
 
-	vmiTemplate, err := s.buildVMITemplate(s.infraNamespace)
-	if err != nil {
-		return nil, err
-	}
+	vmiTemplate := s.buildVMITemplate(s.infraNamespace)
 
 	pvcRequestsStorage := s.machineProviderSpec.RequestedStorage
 	if pvcRequestsStorage == "" {
@@ -180,7 +177,7 @@ func (s *machineScope) assertMandatoryParams() error {
 	}
 }
 
-func (s *machineScope) buildVMITemplate(namespace string) (*kubevirtapiv1.VirtualMachineInstanceTemplateSpec, error) {
+func (s *machineScope) buildVMITemplate(namespace string) *kubevirtapiv1.VirtualMachineInstanceTemplateSpec {
 	virtualMachineName := s.machine.GetName()
 
 	template := &kubevirtapiv1.VirtualMachineInstanceTemplateSpec{}
@@ -274,7 +271,7 @@ func (s *machineScope) buildVMITemplate(namespace string) (*kubevirtapiv1.Virtua
 		},
 	}
 
-	return template, nil
+	return template
 }
 
 func (s *machineScope) GetMachine() *machinev1.Machine {
@@ -306,7 +303,7 @@ func buildIgnitionSecretName(virtualMachineName string) string {
 	return fmt.Sprintf("%s-ignition", virtualMachineName)
 }
 
-func (s *machineScope) CreateIgnitionSecretFromMachine(userData []byte) (*corev1.Secret, error) {
+func (s *machineScope) CreateIgnitionSecretFromMachine(userData []byte) *corev1.Secret {
 	virtualMachineName := s.machine.GetName()
 	ignitionSecretName := buildIgnitionSecretName(virtualMachineName)
 	labels := utils.BuildLabels(s.infraID)
@@ -322,7 +319,7 @@ func (s *machineScope) CreateIgnitionSecretFromMachine(userData []byte) (*corev1
 		},
 	}
 
-	return resultSecret, nil
+	return resultSecret
 }
 
 func (s *machineScope) GetIgnitionSecretName() string {
@@ -365,70 +362,36 @@ func buildBootVolumeDataVolumeTemplate(virtualMachineName, pvcName, dvNamespace,
 	}
 }
 
-func (s *machineScope) SyncMachineFromVm(vm *kubevirtapiv1.VirtualMachine, vmi *kubevirtapiv1.VirtualMachineInstance) error {
-	s.setProviderID(vm)
-
-	if err := s.setMachineAnnotationsAndLabels(vm); err != nil {
-		return fmt.Errorf("failed to set machine cloud provider specifics: %w", err)
-	}
-
-	if err := s.setProviderStatus(vm, vmi, s.conditionSuccess()); err != nil {
-		return machinecontroller.InvalidMachineConfiguration("failed to set machine provider status: %v", err.Error())
-	}
-
-	klog.Infof("Updated machine %s", s.GetMachineName())
-	return nil
+func (s *machineScope) SyncMachine(vm kubevirtapiv1.VirtualMachine, vmi kubevirtapiv1.VirtualMachineInstance) error {
+	s.syncProviderID(vm)
+	s.syncMachineAnnotationsAndLabels(vm)
+	s.syncNetworkAddresses(vmi)
+	return s.syncProviderStatus(vm)
 }
 
-// setProviderID adds providerID in the machine spec
-func (s *machineScope) setProviderID(vm *kubevirtapiv1.VirtualMachine) {
-	// TODO: return an error when the setting is failed
+// syncProviderID adds providerID in the machine spec
+func (s *machineScope) syncProviderID(vm kubevirtapiv1.VirtualMachine) {
 	existingProviderID := s.machine.Spec.ProviderID
-	if vm == nil {
-		return
-	}
 
 	providerID := providerctrl.FormatProviderID(vm.GetNamespace(), vm.GetName())
 
 	if existingProviderID != nil && *existingProviderID == providerID {
-		klog.Infof("%s: ProviderID already set in the machine Spec with value:%s", s.GetMachineName(), *existingProviderID)
+		klog.Infof("%s - syncProviderID: already synced with providerID %s", s.GetMachineName(), *existingProviderID)
 		return
 	}
 
 	s.machine.Spec.ProviderID = &providerID
-	klog.Infof("%s: ProviderID set at machine spec: %s", s.GetMachineName(), providerID)
+	klog.Infof("%s - syncProviderID: successfully synced machine.Spec.ProviderID to %s", s.GetMachineName(), providerID)
 }
 
-// TODO There is only one kind of VirtualMachineConditionType: VirtualMachineFailure
-//      How should report on success?
-//      Is Failure/false is good enough or need to add type to client-go?
-func (s *machineScope) conditionSuccess() kubevirtapiv1.VirtualMachineCondition {
-	return kubevirtapiv1.VirtualMachineCondition{
-		Type:    kubevirtapiv1.VirtualMachineFailure,
-		Status:  corev1.ConditionFalse,
-		Reason:  "MachineCreationSucceeded",
-		Message: "Machine successfully created",
-	}
-}
-
-func (s *machineScope) setMachineAnnotationsAndLabels(vm *kubevirtapiv1.VirtualMachine) error {
-	if vm == nil {
-		return nil
-	}
-
+func (s *machineScope) syncMachineAnnotationsAndLabels(vm kubevirtapiv1.VirtualMachine) {
 	if s.machine.Labels == nil {
 		s.machine.Labels = make(map[string]string)
-	}
-
-	if s.machine.Spec.Labels == nil {
-		s.machine.Spec.Labels = make(map[string]string)
 	}
 
 	if s.machine.Annotations == nil {
 		s.machine.Annotations = make(map[string]string)
 	}
-	vmId := vm.UID
-	vmType := vm.Spec.Template.Spec.Domain.Machine.Type
 
 	vmState := vmNotCreated
 	if vm.Status.Created {
@@ -438,20 +401,15 @@ func (s *machineScope) setMachineAnnotationsAndLabels(vm *kubevirtapiv1.VirtualM
 		}
 	}
 
-	s.machine.ObjectMeta.Annotations[kubevirtIdAnnotationKey] = string(vmId)
-	s.machine.Labels[machinecontroller.MachineInstanceTypeLabelName] = vmType
+	s.machine.ObjectMeta.Annotations[kubevirtIdAnnotationKey] = string(vm.UID)
+	if vm.Spec.Template != nil {
+		s.machine.Labels[machinecontroller.MachineInstanceTypeLabelName] = vm.Spec.Template.Spec.Domain.Machine.Type
+	}
 	s.machine.Annotations[machinecontroller.MachineInstanceStateAnnotationName] = string(vmState)
-
-	return nil
+	klog.Infof("%s - syncMachineAnnotationsAndLabels: successfully synced", s.GetMachineName())
 }
 
-func (s *machineScope) setProviderStatus(vm *kubevirtapiv1.VirtualMachine, vmi *kubevirtapiv1.VirtualMachineInstance, condition kubevirtapiv1.VirtualMachineCondition) error {
-	if vm == nil {
-		klog.Infof("%s: couldn't calculate KubeVirt status - the provided vm is empty", s.machine.GetName())
-		return nil
-	}
-	klog.Infof("%s: Updating status", s.machine.GetName())
-	var networkAddresses []corev1.NodeAddress
+func (s *machineScope) syncProviderStatus(vm kubevirtapiv1.VirtualMachine) error {
 	providerStatus, err := kubevirtproviderv1alpha1.RawExtensionFromProviderStatus(&kubevirtproviderv1alpha1.KubevirtMachineProviderStatus{
 		VirtualMachineStatus: vm.Status,
 	})
@@ -459,13 +417,14 @@ func (s *machineScope) setProviderStatus(vm *kubevirtapiv1.VirtualMachine, vmi *
 		return machinecontroller.InvalidMachineConfiguration("failed to get machine provider status: %v", err.Error())
 	}
 	s.machine.Status.ProviderStatus = providerStatus
+	klog.Infof("%s - syncProviderStatus: successfully synced machine.Status.ProviderStatus to %s", s.GetMachineName(), providerStatus)
+	return nil
+}
 
+func (s *machineScope) syncNetworkAddresses(vmi kubevirtapiv1.VirtualMachineInstance) {
 	// update nodeAddresses
-	networkAddresses = append(networkAddresses, corev1.NodeAddress{Address: vm.Name, Type: corev1.NodeInternalDNS})
-
-	klog.V(5).Infof("using hostname %s to resolve addresses", vm.Name)
-	ips, err := net.LookupIP(vm.Name)
-	if err == nil {
+	networkAddresses := []corev1.NodeAddress{{Address: vmi.Name, Type: corev1.NodeInternalDNS}}
+	if ips, err := net.LookupIP(vmi.Name); err == nil {
 		for _, ip := range ips {
 			if ip.To4() != nil {
 				networkAddresses = append(networkAddresses, corev1.NodeAddress{Type: corev1.NodeInternalIP, Address: ip.String()})
@@ -473,11 +432,17 @@ func (s *machineScope) setProviderStatus(vm *kubevirtapiv1.VirtualMachine, vmi *
 		}
 	}
 
-	klog.Infof("%s: finished calculating KubeVirt status", s.machine.GetName())
-
 	s.machine.Status.Addresses = networkAddresses
-	// TODO: update the phase of the machine
-	//s.machine.Status.Phase = setKubevirtMachineProviderCondition(condition, vm.Status.Conditions)
-
-	return nil
+	klog.Infof("%s - syncNetworkAddresses: successfully synced machine.Status.Addresses to %s", s.GetMachineName(), networkAddresses)
 }
+
+// TODO: update the phase of the machine
+//s.machine.Status.Phase = setKubevirtMachineProviderCondition(condition, vm.Status.Conditions)
+// func (s *machineScope) conditionSuccess() kubevirtapiv1.VirtualMachineCondition {
+// 	return kubevirtapiv1.VirtualMachineCondition{
+// 		Type:    kubevirtapiv1.VirtualMachineFailure,
+// 		Status:  corev1.ConditionFalse,
+// 		Reason:  "MachineCreationSucceeded",
+// 		Message: "Machine successfully created",
+// 	}
+// }

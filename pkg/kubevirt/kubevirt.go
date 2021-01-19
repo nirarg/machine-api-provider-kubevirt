@@ -51,10 +51,7 @@ func (m *manager) Create(machineScope machinescope.MachineScope, userData []byte
 	if err != nil {
 		return err
 	}
-	secretFromMachine, err := machineScope.CreateIgnitionSecretFromMachine(fullUserData)
-	if err != nil {
-		return err
-	}
+	secretFromMachine := machineScope.CreateIgnitionSecretFromMachine(fullUserData)
 	if _, err := m.createInfraClusterSecret(secretFromMachine, machineScope); err != nil {
 		klog.Errorf("%s: error creating ignition secret: %v", machineScope.GetMachineName(), err)
 		conditionFailed := conditionFailed()
@@ -80,7 +77,7 @@ func (m *manager) Create(machineScope machinescope.MachineScope, userData []byte
 
 	klog.Infof("Created Machine %v", machineScope.GetMachineName())
 
-	if err := m.syncMachine(createdVM, machineScope); err != nil {
+	if err := m.syncMachine(*createdVM, machineScope); err != nil {
 		klog.Errorf("%s: fail syncing machine from vm: %v", machineScope.GetMachineName(), err)
 		return err
 	}
@@ -170,7 +167,7 @@ func (m *manager) Update(machineScope machinescope.MachineScope) (wasUpdated boo
 		return false, err
 	}
 
-	if err := m.syncMachine(updatedVM, machineScope); err != nil {
+	if err := m.syncMachine(*updatedVM, machineScope); err != nil {
 		klog.Errorf("%s: fail syncing machine from vm: %v", machineScope.GetMachineName(), err)
 		return false, err
 	}
@@ -216,12 +213,12 @@ func (m *manager) updateVM(err error, virtualMachineFromMachine *kubevirtapiv1.V
 	return wasUpdated, updatedVM, nil
 }
 
-func (m *manager) syncMachine(vm *kubevirtapiv1.VirtualMachine, machineScope machinescope.MachineScope) error {
+func (m *manager) syncMachine(vm kubevirtapiv1.VirtualMachine, machineScope machinescope.MachineScope) error {
 	vmi, err := m.getInraClusterVMI(vm.Name, vm.Namespace, machineScope)
 	if err != nil {
 		klog.Errorf("%s: error getting vmi for machine: %v", machineScope.GetMachineName(), err)
 	}
-	if err := machineScope.SyncMachineFromVm(vm, vmi); err != nil {
+	if err := machineScope.SyncMachine(vm, *vmi); err != nil {
 		klog.Errorf("%s: fail syncing machine from vm: %v", machineScope.GetMachineName(), err)
 		return err
 	}

@@ -90,12 +90,11 @@ func (mr *MockMachineScopeMockRecorder) UpdateAllowed(requeueAfterSeconds interf
 }
 
 // CreateIgnitionSecretFromMachine mocks base method
-func (m *MockMachineScope) CreateIgnitionSecretFromMachine(userData []byte) (*v1.Secret, error) {
+func (m *MockMachineScope) CreateIgnitionSecretFromMachine(userData []byte) *v1.Secret {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CreateIgnitionSecretFromMachine", userData)
 	ret0, _ := ret[0].(*v1.Secret)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	return ret0
 }
 
 // CreateIgnitionSecretFromMachine indicates an expected call of CreateIgnitionSecretFromMachine

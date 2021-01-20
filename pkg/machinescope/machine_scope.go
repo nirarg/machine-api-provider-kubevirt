@@ -43,16 +43,6 @@ const (
 	terminationGracePeriodSeconds     = 600
 )
 
-type MachineScopeCreator interface {
-	CreateMachineScope(machine *machinev1.Machine, infraNamespace string, infraID string) (MachineScope, error)
-}
-
-type machineScopeCreator struct{}
-
-func New() MachineScopeCreator {
-	return machineScopeCreator{}
-}
-
 //go:generate mockgen -source=./machine_scope.go -destination=./mock/machine_scope_generated.go -package=mock
 type MachineScope interface {
 	UpdateAllowed(requeueAfterSeconds time.Duration) bool
@@ -71,29 +61,6 @@ type machineScope struct {
 	machineProviderSpec *kubevirtproviderv1alpha1.KubevirtMachineProviderSpec
 	infraNamespace      string
 	infraID             string
-}
-
-func (creator machineScopeCreator) CreateMachineScope(machine *machinev1.Machine, infraNamespace string, infraID string) (MachineScope, error) {
-	// TODO: insert a validation on machine labels
-	if machine.Labels[machinev1.MachineClusterIDLabel] == "" {
-		return nil, machinecontroller.InvalidMachineConfiguration("%v: missing %q label", machine.GetName(), machinev1.MachineClusterIDLabel)
-	}
-
-	providerSpec, err := kubevirtproviderv1alpha1.ProviderSpecFromRawExtension(machine.Spec.ProviderSpec.Value)
-	if err != nil {
-		return nil, machinecontroller.InvalidMachineConfiguration("failed to get machine config: %v", err)
-	}
-
-	if err != nil {
-		return nil, machinecontroller.InvalidMachineConfiguration("failed to get machine provider status: %v", err.Error())
-	}
-
-	return &machineScope{
-		machine:             machine,
-		machineProviderSpec: providerSpec,
-		infraNamespace:      infraNamespace,
-		infraID:             infraID,
-	}, nil
 }
 
 func (s *machineScope) GetInfraNamespace() string {

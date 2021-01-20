@@ -5,52 +5,14 @@
 package mock
 
 import (
-	x "."
+	reflect "reflect"
+	time "time"
+
 	gomock "github.com/golang/mock/gomock"
 	v1beta1 "github.com/openshift/machine-api-operator/pkg/apis/machine/v1beta1"
 	v1 "k8s.io/api/core/v1"
 	v10 "kubevirt.io/client-go/api/v1"
-	reflect "reflect"
-	time "time"
 )
-
-// MockMachineScopeCreator is a mock of MachineScopeCreator interface
-type MockMachineScopeCreator struct {
-	ctrl     *gomock.Controller
-	recorder *MockMachineScopeCreatorMockRecorder
-}
-
-// MockMachineScopeCreatorMockRecorder is the mock recorder for MockMachineScopeCreator
-type MockMachineScopeCreatorMockRecorder struct {
-	mock *MockMachineScopeCreator
-}
-
-// NewMockMachineScopeCreator creates a new mock instance
-func NewMockMachineScopeCreator(ctrl *gomock.Controller) *MockMachineScopeCreator {
-	mock := &MockMachineScopeCreator{ctrl: ctrl}
-	mock.recorder = &MockMachineScopeCreatorMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use
-func (m *MockMachineScopeCreator) EXPECT() *MockMachineScopeCreatorMockRecorder {
-	return m.recorder
-}
-
-// CreateMachineScope mocks base method
-func (m *MockMachineScopeCreator) CreateMachineScope(machine *v1beta1.Machine, infraNamespace, infraID string) (x.MachineScope, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateMachineScope", machine, infraNamespace, infraID)
-	ret0, _ := ret[0].(x.MachineScope)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// CreateMachineScope indicates an expected call of CreateMachineScope
-func (mr *MockMachineScopeCreatorMockRecorder) CreateMachineScope(machine, infraNamespace, infraID interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateMachineScope", reflect.TypeOf((*MockMachineScopeCreator)(nil).CreateMachineScope), machine, infraNamespace, infraID)
-}
 
 // MockMachineScope is a mock of MachineScope interface
 type MockMachineScope struct {
@@ -103,18 +65,18 @@ func (mr *MockMachineScopeMockRecorder) CreateIgnitionSecretFromMachine(userData
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateIgnitionSecretFromMachine", reflect.TypeOf((*MockMachineScope)(nil).CreateIgnitionSecretFromMachine), userData)
 }
 
-// SyncMachineFromVm mocks base method
-func (m *MockMachineScope) SyncMachineFromVm(vm *v10.VirtualMachine, vmi *v10.VirtualMachineInstance) error {
+// SyncMachine mocks base method
+func (m *MockMachineScope) SyncMachine(vm v10.VirtualMachine, vmi v10.VirtualMachineInstance) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SyncMachineFromVm", vm, vmi)
+	ret := m.ctrl.Call(m, "SyncMachine", vm, vmi)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// SyncMachineFromVm indicates an expected call of SyncMachineFromVm
-func (mr *MockMachineScopeMockRecorder) SyncMachineFromVm(vm, vmi interface{}) *gomock.Call {
+// SyncMachine indicates an expected call of SyncMachine
+func (mr *MockMachineScopeMockRecorder) SyncMachine(vm, vmi interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SyncMachineFromVm", reflect.TypeOf((*MockMachineScope)(nil).SyncMachineFromVm), vm, vmi)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SyncMachine", reflect.TypeOf((*MockMachineScope)(nil).SyncMachine), vm, vmi)
 }
 
 // CreateVirtualMachineFromMachine mocks base method

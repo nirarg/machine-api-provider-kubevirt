@@ -7,6 +7,7 @@ import (
 )
 
 type MachineScopeCreator interface {
+	// CreateMachineScope creates MachineScope struct
 	CreateMachineScope(machine *machinev1.Machine, infraNamespace string, infraID string) (MachineScope, error)
 }
 

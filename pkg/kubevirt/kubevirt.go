@@ -23,14 +23,18 @@ const (
 //go:generate mockgen -source=./kubevirt.go -destination=./mock/kubevirt_generated.go -package=mock
 // KubevirtVM runs the logic to reconciles a machine resource towards its desired state
 type KubevirtVM interface {
+	// Create creates resources in the InfraCluster for the provided Machine, if it does not exist
 	Create(machineScope machinescope.MachineScope, userData []byte) error
+	// Create deletes the resources of the provided Machine from the InfraCluster
 	Delete(machineScope machinescope.MachineScope) error
+	// Update updates the VirtualMachine of the provided Machine in the InfraCluster with the changes in the Machine
+	// Update finds the relevant VirtualMachine and reconciles the Machine resource status against it.
 	Update(machineScope machinescope.MachineScope) (bool, error)
+	// Exists check if the VirtualMachine of the provided Machine exists in the InfraCluster
 	Exists(machineScope machinescope.MachineScope) (bool, error)
 }
 
 // manager is the struct which implement KubevirtVM interface
-// Use infraClusterClientBuilder to create the infra cluster vms
 type manager struct {
 	infraClusterClient infracluster.Client
 }
@@ -42,7 +46,6 @@ func New(infraClusterClient infracluster.Client) KubevirtVM {
 	}
 }
 
-// Create creates machine if it does not exists.
 func (m *manager) Create(machineScope machinescope.MachineScope, userData []byte) (resultErr error) {
 	machineName := machineScope.GetMachineName()
 
@@ -104,7 +107,6 @@ func addHostnameToUserData(src []byte, hostname string) ([]byte, error) {
 	return result, nil
 }
 
-// delete deletes machine
 func (m *manager) Delete(machineScope machinescope.MachineScope) error {
 	machineName := machineScope.GetMachineName()
 
@@ -142,7 +144,6 @@ func (m *manager) Delete(machineScope machinescope.MachineScope) error {
 	return nil
 }
 
-// update finds a vm and reconciles the machine resource status against it.
 func (m *manager) Update(machineScope machinescope.MachineScope) (bool, error) {
 	machineName := machineScope.GetMachineName()
 
@@ -200,7 +201,6 @@ func (m *manager) syncMachine(vm kubevirtapiv1.VirtualMachine, machineScope mach
 	return nil
 }
 
-// exists returns true if machine exists.
 func (m *manager) Exists(machineScope machinescope.MachineScope) (bool, error) {
 	machineName := machineScope.GetMachineName()
 	infraNamespace := machineScope.GetInfraNamespace()

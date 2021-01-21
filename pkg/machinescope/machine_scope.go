@@ -45,14 +45,27 @@ const (
 
 //go:generate mockgen -source=./machine_scope.go -destination=./mock/machine_scope_generated.go -package=mock
 type MachineScope interface {
+	// UpdateAllowed check if conditions allow update the Virtual Machine of this Machine
+	// UpdateAllowed validates that updates come in the right order
 	UpdateAllowed(requeueAfterSeconds time.Duration) bool
+	// CreateIgnitionSecretFromMachine builds *corev1.Secret struct, based on the data saved in the Machine
 	CreateIgnitionSecretFromMachine(userData []byte) *corev1.Secret
+	// SyncMachine update the Machine status, base of provided VirtualMachine and VirtualMachineInstance
+	// The following information is synced:
+	// ProviderID, Annotations, Labels, NetworkAddresses, ProviderStatus
 	SyncMachine(vm kubevirtapiv1.VirtualMachine, vmi kubevirtapiv1.VirtualMachineInstance) error
+	// CreateVirtualMachineFromMachine builds *kubevirtapiv1.VirtualMachine struct, based on the data saved in the Machine
 	CreateVirtualMachineFromMachine() (*kubevirtapiv1.VirtualMachine, error)
+	// GetMachine returns *machinev1.Machine struct saved in this MachineScope
 	GetMachine() *machinev1.Machine
+	// GetMachineName returns this Machine's name
 	GetMachineName() string
+	// GetMachineNamespace returns this Machine's namespace
 	GetMachineNamespace() string
+	// GetInfraNamespace return the namespace in the InfraCluster, in which all resources are created
 	GetInfraNamespace() string
+	// GetIgnitionSecretName returns name of the IgnitionSecret should be used durring current Machine`s
+	// VirtualMachine creation
 	GetIgnitionSecretName() string
 }
 
@@ -253,8 +266,6 @@ func (s *machineScope) GetMachineNamespace() string {
 	return s.machine.GetNamespace()
 }
 
-// updateAllowed validates that updates come in the right order
-// if there is an update that was supposes to be done after that update - return an error
 func (s *machineScope) UpdateAllowed(requeueAfterSeconds time.Duration) bool {
 	return s.machine.Spec.ProviderID != nil &&
 		*s.machine.Spec.ProviderID != "" &&

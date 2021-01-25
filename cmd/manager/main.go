@@ -16,7 +16,6 @@ package main
 import (
 	"context"
 	"flag"
-	"os"
 	"time"
 
 	"github.com/openshift/cluster-api-provider-kubevirt/pkg/actuator"
@@ -88,6 +87,8 @@ func main() {
 	logf.SetLogger(logf.ZapLogger(false))
 	entryLog := log.WithName("entrypoint")
 
+	entryLog.Info("start kubevirt machine controller")
+
 	// Get a config to talk to the apiserver
 	cfg, err := config.GetConfig()
 	if err != nil {
@@ -98,7 +99,7 @@ func main() {
 	opts := manager.Options{
 		LeaderElection:          *leaderElect,
 		LeaderElectionNamespace: *leaderElectResourceNamespace,
-		LeaderElectionID:        "cluster-api-provider-ovirt-leader",
+		LeaderElectionID:        "cluster-api-provider-kubevirt-leader",
 		LeaseDuration:           leaderElectLeaseDuration,
 		MetricsBindAddress:      *metricsAddr,
 		HealthProbeBindAddress:  *healthAddr,
@@ -113,25 +114,24 @@ func main() {
 
 	mgr, err := manager.New(cfg, opts)
 	if err != nil {
-		entryLog.Error(err, "Unable to set up overall controller manager")
-		os.Exit(1)
+		klog.Fatalf("failed to set up overall controller manager, with error: %v", err)
 	}
 
 	// Setup Scheme for all resources
 	if err := mapiv1beta1.AddToScheme(mgr.GetScheme()); err != nil {
-		klog.Fatalf("Error setting up scheme: %v", err)
+		klog.Fatalf("failed to set up scheme, with error: %v", err)
 	}
 
 	// Initialize tenant-cluster clients
 	tenantClusterClient, err := tenantcluster.New(mgr)
 	if err != nil {
-		entryLog.Error(err, "Failed to create tenantcluster client from configuration")
+		klog.Fatalf("failed to create tenantcluster client from configuration, with error: %v", err)
 	}
 
 	// Initialize infra-cluster clients
 	infraClusterClient, err := infracluster.New(context.Background(), tenantClusterClient)
 	if err != nil {
-		entryLog.Error(err, "Failed to create infracluster client from configuration")
+		klog.Fatalf("failed to create infracluster client from configuration, with error: %v", err)
 	}
 
 	// Initialize machineScope creator
@@ -144,27 +144,30 @@ func main() {
 	machineActuator, err := actuator.New(kubevirtVM, mgr.GetEventRecorderFor("kubevirtcontroller"),
 		machineScopeCreator, tenantClusterClient)
 	if err != nil {
-		klog.Fatalf("Error creating actuator: %v", err)
+		klog.Fatalf("failed to create actuator, with error: %v", err)
 	}
 
 	// Register Actuator on machine-controller
 	if err := machine.AddWithActuator(mgr, machineActuator); err != nil {
-		klog.Fatalf("Error adding actuator: %v", err)
+		klog.Fatalf("failed to add actuator, with error: %v", err)
 	}
 
 	// Register the providerID controller
-	providerid.Add(mgr, infraClusterClient, tenantClusterClient)
+	if err := providerid.Add(mgr, infraClusterClient, tenantClusterClient); err != nil {
+		klog.Fatalf("failed to add providerID reconciler, with error: %v", err)
+
+	}
 
 	if err := mgr.AddReadyzCheck("ping", healthz.Ping); err != nil {
-		klog.Fatal(err)
+		klog.Fatalf("failed to add ReadyzCheck, with error: %v", err)
 	}
 
 	if err := mgr.AddHealthzCheck("ping", healthz.Ping); err != nil {
-		klog.Fatal(err)
+		klog.Fatalf("failed to add HealthzCheck, with error: %v", err)
 	}
 
 	// Start the Cmd
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-		klog.Fatalf("Error starting manager: %v", err)
+		klog.Fatalf("failed to start manager, with error: %v", err)
 	}
 }

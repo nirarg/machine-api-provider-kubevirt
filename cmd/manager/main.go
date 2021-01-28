@@ -21,9 +21,9 @@ import (
 	"github.com/openshift/cluster-api-provider-kubevirt/pkg/actuator"
 	"github.com/openshift/cluster-api-provider-kubevirt/pkg/clients/infracluster"
 	"github.com/openshift/cluster-api-provider-kubevirt/pkg/clients/tenantcluster"
+	"github.com/openshift/cluster-api-provider-kubevirt/pkg/controller/nodeupdate"
 	"github.com/openshift/cluster-api-provider-kubevirt/pkg/kubevirt"
 	"github.com/openshift/cluster-api-provider-kubevirt/pkg/machinescope"
-	"github.com/openshift/cluster-api-provider-kubevirt/pkg/providerid"
 	mapiv1beta1 "github.com/openshift/machine-api-operator/pkg/apis/machine/v1beta1"
 	"github.com/openshift/machine-api-operator/pkg/controller/machine"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
@@ -32,7 +32,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	ctrl "sigs.k8s.io/controller-runtime/pkg/manager/signals"
-	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 )
 
 // The default durations for the leader election operations.
@@ -40,11 +39,10 @@ var (
 	leaseDuration = 120 * time.Second
 	renewDeadline = 110 * time.Second
 	retryPeriod   = 20 * time.Second
+	syncPeriod    = 10 * time.Minute
 )
 
 func main() {
-	klog.InitFlags(nil)
-
 	watchNamespace := flag.String(
 		"namespace",
 		"",
@@ -81,13 +79,11 @@ func main() {
 		"The duration that non-leader candidates will wait after observing a leadership renewal until attempting to acquire leadership of a led but unrenewed leader slot. This is effectively the maximum duration that a leader can be stopped before it is replaced by another candidate. This is only applicable if leader election is enabled.",
 	)
 
+	klog.InitFlags(nil)
+	flag.Set("logtostderr", "true")
 	flag.Parse()
 
-	log := logf.Log.WithName("kubevirt-controller-manager")
-	logf.SetLogger(logf.ZapLogger(false))
-	entryLog := log.WithName("entrypoint")
-
-	entryLog.Info("start kubevirt machine controller")
+	klog.Info("start kubevirt machine controller")
 
 	// Get a config to talk to the apiserver
 	cfg, err := config.GetConfig()
@@ -153,7 +149,7 @@ func main() {
 	}
 
 	// Register the providerID controller
-	if err := providerid.Add(mgr, infraClusterClient, tenantClusterClient); err != nil {
+	if err := nodeupdate.Add(mgr, infraClusterClient, tenantClusterClient); err != nil {
 		klog.Fatalf("failed to add providerID reconciler, with error: %v", err)
 
 	}

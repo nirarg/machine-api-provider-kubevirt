@@ -77,16 +77,16 @@ func (mr *MockKubevirtVMMockRecorder) Update(machineScope interface{}) *gomock.C
 }
 
 // Exists mocks base method
-func (m *MockKubevirtVM) Exists(machineScope machinescope.MachineScope) (bool, error) {
+func (m *MockKubevirtVM) Exists(machineName, infraNamespace string) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Exists", machineScope)
+	ret := m.ctrl.Call(m, "Exists", machineName, infraNamespace)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Exists indicates an expected call of Exists
-func (mr *MockKubevirtVMMockRecorder) Exists(machineScope interface{}) *gomock.Call {
+func (mr *MockKubevirtVMMockRecorder) Exists(machineName, infraNamespace interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exists", reflect.TypeOf((*MockKubevirtVM)(nil).Exists), machineScope)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exists", reflect.TypeOf((*MockKubevirtVM)(nil).Exists), machineName, infraNamespace)
 }

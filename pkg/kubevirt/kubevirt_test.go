@@ -18,6 +18,7 @@ import (
 const (
 	clusterNamespace = "kubevirt-actuator-cluster"
 	infraID          = "test-id-asdfg"
+	providerIDFmt    = "kubevirt://%s/%s"
 )
 
 func TestCreate(t *testing.T) {
@@ -39,7 +40,7 @@ func TestCreate(t *testing.T) {
 				mockMachineScope.EXPECT().CreateVirtualMachineFromMachine().Return(vm, nil).Times(1)
 				mockInfraClusterClient.EXPECT().CreateVirtualMachine(gomock.Any(), testutils.InfraNamespace, vm).Return(vm, nil).Times(1)
 				mockInfraClusterClient.EXPECT().GetVirtualMachineInstance(gomock.Any(), testutils.InfraNamespace, testutils.MachineName, gomock.Any()).Return(vmi, nil).Times(1)
-				mockMachineScope.EXPECT().SyncMachine(*vm, *vmi).Return(nil).Times(1)
+				mockMachineScope.EXPECT().SyncMachine(*vm, *vmi, fmt.Sprintf(providerIDFmt, testutils.InfraNamespace, testutils.MachineName)).Return(nil).Times(1)
 			},
 		},
 		{
@@ -109,7 +110,7 @@ func TestCreate(t *testing.T) {
 				mockMachineScope.EXPECT().CreateVirtualMachineFromMachine().Return(vm, nil).Times(1)
 				mockInfraClusterClient.EXPECT().CreateVirtualMachine(gomock.Any(), testutils.InfraNamespace, vm).Return(vm, nil).Times(1)
 				mockInfraClusterClient.EXPECT().GetVirtualMachineInstance(gomock.Any(), testutils.InfraNamespace, testutils.MachineName, gomock.Any()).Return(vmi, nil).Times(1)
-				mockMachineScope.EXPECT().SyncMachine(*vm, *vmi).Return(fmt.Errorf("test error")).Times(1)
+				mockMachineScope.EXPECT().SyncMachine(*vm, *vmi, fmt.Sprintf(providerIDFmt, testutils.InfraNamespace, testutils.MachineName)).Return(fmt.Errorf("test error")).Times(1)
 			},
 			expectedErr: "test-machine-name: Error during Create: failed to sync the Machine, with error: test error",
 		},
@@ -222,35 +223,29 @@ func TestExists(t *testing.T) {
 		name           string
 		expectedErr    string
 		expectedResult bool
-		expect         func(mockInfraClusterClient *mockInfraClusterClient.MockClient, mockMachineScope *mockMachineScope.MockMachineScope)
+		expect         func(mockInfraClusterClient *mockInfraClusterClient.MockClient)
 	}{
 		{
 			name: "Success virtual machine exists",
-			expect: func(mockInfraClusterClient *mockInfraClusterClient.MockClient, mockMachineScope *mockMachineScope.MockMachineScope) {
+			expect: func(mockInfraClusterClient *mockInfraClusterClient.MockClient) {
 				vm := testutils.StubVirtualMachine()
 
-				mockMachineScope.EXPECT().GetMachineName().Return(testutils.MachineName).Times(1)
-				mockMachineScope.EXPECT().GetInfraNamespace().Return(testutils.InfraNamespace).Times(1)
 				mockInfraClusterClient.EXPECT().GetVirtualMachine(gomock.Any(), testutils.InfraNamespace, testutils.MachineName, gomock.Any()).Return(vm, nil).Times(1)
 			},
 			expectedResult: true,
 		},
 		{
 			name: "Success virtual machine doesn't exist",
-			expect: func(mockInfraClusterClient *mockInfraClusterClient.MockClient, mockMachineScope *mockMachineScope.MockMachineScope) {
+			expect: func(mockInfraClusterClient *mockInfraClusterClient.MockClient) {
 				notFoundErr := apierr.NewNotFound(schema.GroupResource{Group: "", Resource: "test"}, "3")
 
-				mockMachineScope.EXPECT().GetMachineName().Return(testutils.MachineName).Times(1)
-				mockMachineScope.EXPECT().GetInfraNamespace().Return(testutils.InfraNamespace).Times(1)
 				mockInfraClusterClient.EXPECT().GetVirtualMachine(gomock.Any(), testutils.InfraNamespace, testutils.MachineName, gomock.Any()).Return(nil, notFoundErr).Times(1)
 			},
 			expectedResult: false,
 		},
 		{
 			name: "Failure get virtual machine",
-			expect: func(mockInfraClusterClient *mockInfraClusterClient.MockClient, mockMachineScope *mockMachineScope.MockMachineScope) {
-				mockMachineScope.EXPECT().GetMachineName().Return(testutils.MachineName).Times(1)
-				mockMachineScope.EXPECT().GetInfraNamespace().Return(testutils.InfraNamespace).Times(1)
+			expect: func(mockInfraClusterClient *mockInfraClusterClient.MockClient) {
 				mockInfraClusterClient.EXPECT().GetVirtualMachine(gomock.Any(), testutils.InfraNamespace, testutils.MachineName, gomock.Any()).Return(nil, fmt.Errorf("test error")).Times(1)
 			},
 			expectedErr: "test-machine-name: Error during Exists: failed to get vm of the Machine, with error: test error",
@@ -261,12 +256,11 @@ func TestExists(t *testing.T) {
 			mockCtrl := gomock.NewController(t)
 			defer mockCtrl.Finish()
 			mockInfraClusterClient := mockInfraClusterClient.NewMockClient(mockCtrl)
-			mockMachineScope := mockMachineScope.NewMockMachineScope(mockCtrl)
 
-			tc.expect(mockInfraClusterClient, mockMachineScope)
+			tc.expect(mockInfraClusterClient)
 
 			kubevirtVM := New(mockInfraClusterClient)
-			result, err := kubevirtVM.Exists(mockMachineScope)
+			result, err := kubevirtVM.Exists(testutils.MachineName, testutils.InfraNamespace)
 			if tc.expectedErr != "" {
 				assert.Error(t, err, tc.expectedErr)
 			} else {
@@ -301,7 +295,7 @@ func TestUpdate(t *testing.T) {
 				mockInfraClusterClient.EXPECT().GetVirtualMachine(gomock.Any(), testutils.InfraNamespace, testutils.MachineName, gomock.Any()).Return(vms.existingVM, nil).Times(1)
 				mockInfraClusterClient.EXPECT().UpdateVirtualMachine(gomock.Any(), testutils.InfraNamespace, vms.updateVM).Return(vms.resultVM, nil).Times(1)
 				mockInfraClusterClient.EXPECT().GetVirtualMachineInstance(gomock.Any(), testutils.InfraNamespace, testutils.MachineName, gomock.Any()).Return(vmi, nil).Times(1)
-				mockMachineScope.EXPECT().SyncMachine(*vms.resultVM, *vmi).Return(nil).Times(1)
+				mockMachineScope.EXPECT().SyncMachine(*vms.resultVM, *vmi, fmt.Sprintf(providerIDFmt, testutils.InfraNamespace, testutils.MachineName)).Return(nil).Times(1)
 			},
 			expectedResult: true,
 		},
@@ -317,7 +311,7 @@ func TestUpdate(t *testing.T) {
 				mockInfraClusterClient.EXPECT().GetVirtualMachine(gomock.Any(), testutils.InfraNamespace, testutils.MachineName, gomock.Any()).Return(vms.existingVM, nil).Times(1)
 				mockInfraClusterClient.EXPECT().UpdateVirtualMachine(gomock.Any(), testutils.InfraNamespace, vms.updateVM).Return(vms.resultVM, nil).Times(1)
 				mockInfraClusterClient.EXPECT().GetVirtualMachineInstance(gomock.Any(), testutils.InfraNamespace, testutils.MachineName, gomock.Any()).Return(vmi, nil).Times(1)
-				mockMachineScope.EXPECT().SyncMachine(*vms.resultVM, *vmi).Return(nil).Times(1)
+				mockMachineScope.EXPECT().SyncMachine(*vms.resultVM, *vmi, fmt.Sprintf(providerIDFmt, testutils.InfraNamespace, testutils.MachineName)).Return(nil).Times(1)
 			},
 			expectedResult: false,
 		},
@@ -369,7 +363,7 @@ func TestUpdate(t *testing.T) {
 				mockInfraClusterClient.EXPECT().GetVirtualMachine(gomock.Any(), testutils.InfraNamespace, testutils.MachineName, gomock.Any()).Return(vms.existingVM, nil).Times(1)
 				mockInfraClusterClient.EXPECT().UpdateVirtualMachine(gomock.Any(), testutils.InfraNamespace, vms.updateVM).Return(vms.resultVM, nil).Times(1)
 				mockInfraClusterClient.EXPECT().GetVirtualMachineInstance(gomock.Any(), testutils.InfraNamespace, testutils.MachineName, gomock.Any()).Return(vmi, nil).Times(1)
-				mockMachineScope.EXPECT().SyncMachine(*vms.resultVM, *vmi).Return(fmt.Errorf("test error")).Times(1)
+				mockMachineScope.EXPECT().SyncMachine(*vms.resultVM, *vmi, fmt.Sprintf(providerIDFmt, testutils.InfraNamespace, testutils.MachineName)).Return(fmt.Errorf("test error")).Times(1)
 			},
 			expectedErr: "test-machine-name: Error during Update: failed to sync the Machine, with error: test error",
 		},

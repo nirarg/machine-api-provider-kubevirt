@@ -5,13 +5,12 @@
 package mock
 
 import (
-	reflect "reflect"
-	time "time"
-
 	gomock "github.com/golang/mock/gomock"
 	v1beta1 "github.com/openshift/machine-api-operator/pkg/apis/machine/v1beta1"
 	v1 "k8s.io/api/core/v1"
 	v10 "kubevirt.io/client-go/api/v1"
+	reflect "reflect"
+	time "time"
 )
 
 // MockMachineScope is a mock of MachineScope interface
@@ -66,17 +65,17 @@ func (mr *MockMachineScopeMockRecorder) CreateIgnitionSecretFromMachine(userData
 }
 
 // SyncMachine mocks base method
-func (m *MockMachineScope) SyncMachine(vm v10.VirtualMachine, vmi v10.VirtualMachineInstance) error {
+func (m *MockMachineScope) SyncMachine(vm v10.VirtualMachine, vmi v10.VirtualMachineInstance, providerID string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SyncMachine", vm, vmi)
+	ret := m.ctrl.Call(m, "SyncMachine", vm, vmi, providerID)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SyncMachine indicates an expected call of SyncMachine
-func (mr *MockMachineScopeMockRecorder) SyncMachine(vm, vmi interface{}) *gomock.Call {
+func (mr *MockMachineScopeMockRecorder) SyncMachine(vm, vmi, providerID interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SyncMachine", reflect.TypeOf((*MockMachineScope)(nil).SyncMachine), vm, vmi)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SyncMachine", reflect.TypeOf((*MockMachineScope)(nil).SyncMachine), vm, vmi, providerID)
 }
 
 // CreateVirtualMachineFromMachine mocks base method

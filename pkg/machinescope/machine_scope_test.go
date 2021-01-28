@@ -194,7 +194,7 @@ func TestSyncMachine(t *testing.T) {
 				{Type: corev1.NodeInternalIP, Address: "127.0.0.1"},
 			}
 
-			err = machineScope.SyncMachine(vm, *testutils.StubVirtualMachineInstance())
+			err = machineScope.SyncMachine(vm, *testutils.StubVirtualMachineInstance(), providerID)
 			if tc.expectedErr != "" {
 				assert.Error(t, err, tc.expectedErr)
 			} else {

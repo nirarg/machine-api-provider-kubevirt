@@ -8,7 +8,6 @@ import (
 	machinecontroller "github.com/openshift/machine-api-operator/pkg/controller/machine"
 
 	kubevirtproviderv1alpha1 "github.com/openshift/cluster-api-provider-kubevirt/pkg/apis/kubevirtprovider/v1alpha1"
-	providerctrl "github.com/openshift/cluster-api-provider-kubevirt/pkg/providerid"
 	"github.com/openshift/cluster-api-provider-kubevirt/pkg/utils"
 	machinev1 "github.com/openshift/machine-api-operator/pkg/apis/machine/v1beta1"
 	corev1 "k8s.io/api/core/v1"
@@ -53,7 +52,7 @@ type MachineScope interface {
 	// SyncMachine update the Machine status, base of provided VirtualMachine and VirtualMachineInstance
 	// The following information is synced:
 	// ProviderID, Annotations, Labels, NetworkAddresses, ProviderStatus
-	SyncMachine(vm kubevirtapiv1.VirtualMachine, vmi kubevirtapiv1.VirtualMachineInstance) error
+	SyncMachine(vm kubevirtapiv1.VirtualMachine, vmi kubevirtapiv1.VirtualMachineInstance, providerID string) error
 	// CreateVirtualMachineFromMachine builds *kubevirtapiv1.VirtualMachine struct, based on the data saved in the Machine
 	CreateVirtualMachineFromMachine() (*kubevirtapiv1.VirtualMachine, error)
 	// GetMachine returns *machinev1.Machine struct saved in this MachineScope
@@ -340,18 +339,16 @@ func buildBootVolumeDataVolumeTemplate(virtualMachineName, pvcName, dvNamespace,
 	}
 }
 
-func (s *machineScope) SyncMachine(vm kubevirtapiv1.VirtualMachine, vmi kubevirtapiv1.VirtualMachineInstance) error {
-	s.syncProviderID(vm)
+func (s *machineScope) SyncMachine(vm kubevirtapiv1.VirtualMachine, vmi kubevirtapiv1.VirtualMachineInstance, providerID string) error {
+	s.syncProviderID(vm, providerID)
 	s.syncMachineAnnotationsAndLabels(vm)
 	s.syncNetworkAddresses(vmi)
 	return s.syncProviderStatus(vm)
 }
 
 // syncProviderID adds providerID in the machine spec
-func (s *machineScope) syncProviderID(vm kubevirtapiv1.VirtualMachine) {
+func (s *machineScope) syncProviderID(vm kubevirtapiv1.VirtualMachine, providerID string) {
 	existingProviderID := s.machine.Spec.ProviderID
-
-	providerID := providerctrl.FormatProviderID(vm.GetNamespace(), vm.GetName())
 
 	if existingProviderID != nil && *existingProviderID == providerID {
 		klog.Infof("%s - syncProviderID: already synced with providerID %s", s.GetMachineName(), *existingProviderID)

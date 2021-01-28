@@ -159,14 +159,9 @@ func (a *actuator) getUserData(machineScope machinescope.MachineScope) ([]byte, 
 // Exists determines if the given machine currently exists.
 // A machine which is not terminated is considered as existing.
 func (a *actuator) Exists(ctx context.Context, machine *machinev1.Machine) (bool, error) {
-	machineScope, err := a.createMachineScope(machine)
-	if err != nil {
-		return false, a.handleMachineError(machine, a.eventActionPointer(existsEventAction), err)
-	}
+	klog.Infof("%s: actuator checking if machine exists", machine.GetName())
 
-	klog.Infof("%s: actuator checking if machine exists", machineScope.GetMachineName())
-
-	return a.kubevirtVM.Exists(machineScope)
+	return a.kubevirtVM.Exists(machine.GetName(), a.infraNamespace)
 }
 
 // Update attempts to sync machine state with an existing instance.

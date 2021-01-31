@@ -30,7 +30,7 @@ func TestCreate(t *testing.T) {
 		{
 			name: "Success",
 			expect: func(mockInfraClusterClient *mockInfraClusterClient.MockClient, mockMachineScope *mockMachineScope.MockMachineScope) {
-				vm := testutils.StubVirtualMachine()
+				vm := testutils.StubVirtualMachine(nil, nil, nil)
 				vmi := testutils.StubVirtualMachineInstance()
 				ignitionSecret := testutils.StubIgnitionSecret()
 
@@ -57,7 +57,7 @@ func TestCreate(t *testing.T) {
 		{
 			name: "Failure build virtual machine struct",
 			expect: func(mockInfraClusterClient *mockInfraClusterClient.MockClient, mockMachineScope *mockMachineScope.MockMachineScope) {
-				vm := testutils.StubVirtualMachine()
+				vm := testutils.StubVirtualMachine(nil, nil, nil)
 				ignitionSecret := testutils.StubIgnitionSecret()
 
 				mockMachineScope.EXPECT().GetMachineName().Return(testutils.MachineName).Times(1)
@@ -70,7 +70,7 @@ func TestCreate(t *testing.T) {
 		{
 			name: "Failure create virtual machine",
 			expect: func(mockInfraClusterClient *mockInfraClusterClient.MockClient, mockMachineScope *mockMachineScope.MockMachineScope) {
-				vm := testutils.StubVirtualMachine()
+				vm := testutils.StubVirtualMachine(nil, nil, nil)
 				ignitionSecret := testutils.StubIgnitionSecret()
 
 				mockMachineScope.EXPECT().GetMachineName().Return(testutils.MachineName).Times(1)
@@ -84,7 +84,7 @@ func TestCreate(t *testing.T) {
 		{
 			name: "Failure get virtual machine instance",
 			expect: func(mockInfraClusterClient *mockInfraClusterClient.MockClient, mockMachineScope *mockMachineScope.MockMachineScope) {
-				vm := testutils.StubVirtualMachine()
+				vm := testutils.StubVirtualMachine(nil, nil, nil)
 				vmi := testutils.StubVirtualMachineInstance()
 				ignitionSecret := testutils.StubIgnitionSecret()
 
@@ -100,7 +100,7 @@ func TestCreate(t *testing.T) {
 		{
 			name: "Failure sync machine",
 			expect: func(mockInfraClusterClient *mockInfraClusterClient.MockClient, mockMachineScope *mockMachineScope.MockMachineScope) {
-				vm := testutils.StubVirtualMachine()
+				vm := testutils.StubVirtualMachine(nil, nil, nil)
 				vmi := testutils.StubVirtualMachineInstance()
 				ignitionSecret := testutils.StubIgnitionSecret()
 
@@ -144,7 +144,7 @@ func TestDelete(t *testing.T) {
 		{
 			name: "Success",
 			expect: func(mockInfraClusterClient *mockInfraClusterClient.MockClient, mockMachineScope *mockMachineScope.MockMachineScope) {
-				vm := testutils.StubVirtualMachine()
+				vm := testutils.StubVirtualMachine(nil, nil, nil)
 
 				mockMachineScope.EXPECT().GetMachineName().Return(testutils.MachineName).Times(1)
 				mockMachineScope.EXPECT().CreateVirtualMachineFromMachine().Return(vm, nil).Times(1)
@@ -155,7 +155,7 @@ func TestDelete(t *testing.T) {
 		{
 			name: "Success virtual machine not found",
 			expect: func(mockInfraClusterClient *mockInfraClusterClient.MockClient, mockMachineScope *mockMachineScope.MockMachineScope) {
-				vm := testutils.StubVirtualMachine()
+				vm := testutils.StubVirtualMachine(nil, nil, nil)
 
 				notFoundErr := apierr.NewNotFound(schema.GroupResource{Group: "", Resource: "test"}, "3")
 
@@ -167,7 +167,7 @@ func TestDelete(t *testing.T) {
 		{
 			name: "Failure create virtual machine struct",
 			expect: func(mockInfraClusterClient *mockInfraClusterClient.MockClient, mockMachineScope *mockMachineScope.MockMachineScope) {
-				vm := testutils.StubVirtualMachine()
+				vm := testutils.StubVirtualMachine(nil, nil, nil)
 
 				mockMachineScope.EXPECT().GetMachineName().Return(testutils.MachineName).Times(1)
 				mockMachineScope.EXPECT().CreateVirtualMachineFromMachine().Return(vm, fmt.Errorf("test error")).Times(1)
@@ -177,7 +177,7 @@ func TestDelete(t *testing.T) {
 		{
 			name: "Failure get virtual machine",
 			expect: func(mockInfraClusterClient *mockInfraClusterClient.MockClient, mockMachineScope *mockMachineScope.MockMachineScope) {
-				vm := testutils.StubVirtualMachine()
+				vm := testutils.StubVirtualMachine(nil, nil, nil)
 
 				mockMachineScope.EXPECT().GetMachineName().Return(testutils.MachineName).Times(1)
 				mockMachineScope.EXPECT().CreateVirtualMachineFromMachine().Return(vm, nil).Times(1)
@@ -188,7 +188,7 @@ func TestDelete(t *testing.T) {
 		{
 			name: "Failure delete virtual machine",
 			expect: func(mockInfraClusterClient *mockInfraClusterClient.MockClient, mockMachineScope *mockMachineScope.MockMachineScope) {
-				vm := testutils.StubVirtualMachine()
+				vm := testutils.StubVirtualMachine(nil, nil, nil)
 
 				mockMachineScope.EXPECT().GetMachineName().Return(testutils.MachineName).Times(1)
 				mockMachineScope.EXPECT().CreateVirtualMachineFromMachine().Return(vm, nil).Times(1)
@@ -228,7 +228,7 @@ func TestExists(t *testing.T) {
 		{
 			name: "Success virtual machine exists",
 			expect: func(mockInfraClusterClient *mockInfraClusterClient.MockClient) {
-				vm := testutils.StubVirtualMachine()
+				vm := testutils.StubVirtualMachine(nil, nil, nil)
 
 				mockInfraClusterClient.EXPECT().GetVirtualMachine(gomock.Any(), testutils.InfraNamespace, testutils.MachineName, gomock.Any()).Return(vm, nil).Times(1)
 			},
@@ -376,10 +376,10 @@ func TestUpdate(t *testing.T) {
 			mockMachineScope := mockMachineScope.NewMockMachineScope(mockCtrl)
 
 			vms := vmsForUpdate{
-				createdVM:  testutils.StubVirtualMachine(),
-				existingVM: testutils.StubVirtualMachine(),
-				updateVM:   testutils.StubVirtualMachine(),
-				resultVM:   testutils.StubVirtualMachine(),
+				createdVM:  testutils.StubVirtualMachine(nil, nil, nil),
+				existingVM: testutils.StubVirtualMachine(nil, nil, nil),
+				updateVM:   testutils.StubVirtualMachine(nil, nil, nil),
+				resultVM:   testutils.StubVirtualMachine(nil, nil, nil),
 			}
 			vms.existingVM.ObjectMeta.ResourceVersion = "1234"
 			vms.existingVM.Status.Ready = true

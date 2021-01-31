@@ -8,6 +8,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apiresource "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	kubevirtapiv1 "kubevirt.io/client-go/api/v1"
 	cdiv1 "kubevirt.io/containerized-data-importer/pkg/apis/core/v1alpha1"
 )
@@ -105,8 +106,8 @@ func StubMachine() (*machinev1.Machine, error) {
 	return machine, nil
 }
 
-func StubVirtualMachine() *kubevirtapiv1.VirtualMachine {
-	return &kubevirtapiv1.VirtualMachine{
+func StubVirtualMachine(name *string, namespace *string, UID *string) *kubevirtapiv1.VirtualMachine {
+	result := &kubevirtapiv1.VirtualMachine{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      MachineName,
 			Namespace: InfraNamespace,
@@ -234,6 +235,16 @@ func StubVirtualMachine() *kubevirtapiv1.VirtualMachine {
 			},
 		},
 	}
+	if name != nil {
+		result.Name = *name
+	}
+	if namespace != nil {
+		result.Namespace = *namespace
+	}
+	if UID != nil {
+		result.UID = types.UID(*UID)
+	}
+	return result
 }
 
 func deepCopyMap(src map[string]string) map[string]string {
@@ -242,4 +253,8 @@ func deepCopyMap(src map[string]string) map[string]string {
 		result[k] = v
 	}
 	return result
+}
+
+func StringPointer(src string) *string {
+	return &src
 }

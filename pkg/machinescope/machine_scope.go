@@ -310,7 +310,6 @@ func buildBootVolumeDataVolumeTemplate(virtualMachineName, pvcName, dvNamespace,
 		AccessModes: []corev1.PersistentVolumeAccessMode{
 			accessMode,
 		},
-		// TODO: Where to get it?? - add as a list
 		Resources: corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{
 				corev1.ResourceStorage: apiresource.MustParse(pvcRequestsStorage),
@@ -410,14 +409,3 @@ func (s *machineScope) syncNetworkAddresses(vmi kubevirtapiv1.VirtualMachineInst
 	s.machine.Status.Addresses = networkAddresses
 	klog.Infof("%s - syncNetworkAddresses: successfully synced machine.Status.Addresses to %s", s.GetMachineName(), networkAddresses)
 }
-
-// TODO: update the phase of the machine
-//s.machine.Status.Phase = setKubevirtMachineProviderCondition(condition, vm.Status.Conditions)
-// func (s *machineScope) conditionSuccess() kubevirtapiv1.VirtualMachineCondition {
-// 	return kubevirtapiv1.VirtualMachineCondition{
-// 		Type:    kubevirtapiv1.VirtualMachineFailure,
-// 		Status:  corev1.ConditionFalse,
-// 		Reason:  "MachineCreationSucceeded",
-// 		Message: "Machine successfully created",
-// 	}
-// }
